@@ -776,27 +776,44 @@
                                     console.log(`  🪙 Lade ERC-20 Token: ${token.address}`);
                                     const contract = new web3.eth.Contract(ERC20_ABI, token.address);
                                     
+                                    // WICHTIG: Decimals IMMER vom Contract abrufen
+                                    let actualDecimals = token.decimals; // Fallback
+                                    try {
+                                        actualDecimals = await contract.methods.decimals().call();
+                                        actualDecimals = parseInt(actualDecimals);
+                                        console.log(`    📊 Decimals vom Contract: ${actualDecimals}`);
+                                    } catch (decimalsError) {
+                                        console.log(`    ⚠️ Konnte Decimals nicht abrufen, verwende Default: ${actualDecimals}`);
+                                    }
+                                    
                                     // Balance abrufen
                                     const rawBalance = await contract.methods.balanceOf(wallet.address).call();
                                     
-                                    // Token-Info abrufen (Name, Symbol, Decimals)
+                                    // Token-Info abrufen (Name, Symbol)
+                                    let tokenName = token.name;
+                                    let tokenSymbol = token.symbol;
+                                    
                                     try {
-                                        const [tokenName, tokenSymbol, tokenDecimals] = await Promise.all([
+                                        const [fetchedName, fetchedSymbol] = await Promise.all([
                                             contract.methods.name().call().catch(() => token.name),
-                                            contract.methods.symbol().call().catch(() => token.symbol),
-                                            contract.methods.decimals().call().catch(() => token.decimals)
+                                            contract.methods.symbol().call().catch(() => token.symbol)
                                         ]);
                                         
-                                        token.name = tokenName;
-                                        token.symbol = tokenSymbol;
-                                        token.decimals = parseInt(tokenDecimals);
+                                        tokenName = fetchedName;
+                                        tokenSymbol = fetchedSymbol;
                                         
-                                        console.log(`    ℹ️ Token Info: ${tokenName} (${tokenSymbol})`);
+                                        console.log(`    ℹ️ Token Info: ${tokenName} (${tokenSymbol}), Decimals: ${actualDecimals}`);
                                     } catch (infoError) {
                                         console.log(`    ⚠️ Konnte Token-Info nicht abrufen, verwende Defaults`);
                                     }
                                     
-                                    balance = parseFloat(rawBalance) / Math.pow(10, token.decimals);
+                                    // Balance mit den KORREKTEN Decimals berechnen
+                                    balance = parseFloat(rawBalance) / Math.pow(10, actualDecimals);
+                                    
+                                    // Token-Info für die Anzeige updaten
+                                    token.name = tokenName;
+                                    token.symbol = tokenSymbol;
+                                    token.decimals = actualDecimals;
                                 }
 
                                 console.log(`    ✓ Balance: ${balance} ${token.symbol}`);
@@ -961,16 +978,33 @@
         }
 
         function formatNumber(num) {
-            if (num >= 1000000) {
-                return (num / 1000000).toFixed(2) + 'M';
-            } else if (num >= 1000) {
-                return (num / 1000).toFixed(2) + 'K';
-            } else if (num < 0.01) {
-                return num.toFixed(8);
-            } else if (num < 1) {
-                return num.toFixed(6);
+            // Schweizer Zahlenformat: ' als Tausenderzeichen, . als Dezimalzeichen
+            
+            // Bestimme Dezimalstellen basierend auf Grösse
+            let decimals;
+            if (num >= 1000) {
+                decimals = 2; // Grosse Zahlen: 2 Dezimalstellen
+            } else if (num >= 1) {
+                decimals = 4; // Normale Zahlen: 4 Dezimalstellen
+            } else if (num >= 0.01) {
+                decimals = 6; // Kleine Zahlen: 6 Dezimalstellen
+            } else {
+                decimals = 8; // Sehr kleine Zahlen: 8 Dezimalstellen
             }
-            return num.toFixed(4);
+            
+            // Zahl formatieren
+            const fixedNum = num.toFixed(decimals);
+            
+            // In Ganzzahl und Dezimalteil aufteilen
+            const parts = fixedNum.split('.');
+            const integerPart = parts[0];
+            const decimalPart = parts[1];
+            
+            // Tausendertrennzeichen (Apostroph) hinzufügen
+            const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+            
+            // Zusammensetzen mit Punkt als Dezimaltrennzeichen
+            return decimalPart ? `${formattedInteger}.${decimalPart}` : formattedInteger;
         }
 
         function updateTimestamp() {
