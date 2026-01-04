@@ -429,7 +429,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp" id="timestamp">Lädt...</div>
+            <div class="timestamp">Version: 04.01.2026, 22:30:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
@@ -441,7 +441,7 @@
                 <label for="tokenFilter">Token:</label>
                 <input type="text" id="tokenFilter" class="filter-input" placeholder="Token filtern...">
             </div>
-            <button class="btn btn-primary" onclick="updateTimestamp(); loadAllWallets()">🔄 Aktualisieren</button>
+            <button class="btn btn-primary" onclick="loadAllWallets()">🔄 Aktualisieren</button>
             <button class="btn btn-secondary" onclick="scanForMoreTokens()">🔍 Weitere Token scannen</button>
         </div>
 
@@ -686,7 +686,6 @@
         async function initializeApp() {
             const web3Ready = await initializeWeb3();
             if (web3Ready) {
-                updateTimestamp();
                 loadAllWallets();
             }
         }
@@ -1015,22 +1014,6 @@
             
             // Zusammensetzen mit Punkt als Dezimaltrennzeichen
             return decimalPart ? `${formattedInteger}.${decimalPart}` : formattedInteger;
-        }
-
-        function updateTimestamp() {
-            const now = new Date();
-            const swissTime = new Intl.DateTimeFormat('de-CH', {
-                timeZone: 'Europe/Zurich',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            }).format(now);
-            
-            document.getElementById('timestamp').textContent = `Letzte Aktualisierung: ${swissTime} (Schweizer Zeit)`;
         }
 
         function scanForMoreTokens() {
