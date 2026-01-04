@@ -356,6 +356,16 @@
             font-size: 13px;
         }
 
+        .token-address-cell {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #718096;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         .error {
             background: #fed7d7;
             color: #c53030;
@@ -505,7 +515,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp">Version: 05.01.2026, 00:10:00 (Schweizer Zeit)</div>
+            <div class="timestamp">Version: 04.01.2026, 20:18:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
@@ -733,7 +743,7 @@
                         'eth': 'ethereum',
                         'bsc': 'binancecoin',
                         'polygon': 'matic-network',
-                        'apertum': 'avalanche-2'
+                        'apertum': 'aptm'  // Apertum Kurzname auf CoinGecko
                     };
                     
                     const coinId = coinIds[chain];
@@ -1062,6 +1072,7 @@
                             <tr>
                                 <th class="sortable" onclick="sortTable('wallet')">Wallet</th>
                                 <th class="sortable" onclick="sortTable('tokenSymbol')">Token</th>
+                                <th class="sortable" onclick="sortTable('tokenAddress')">Token-Adresse</th>
                                 <th class="sortable" onclick="sortTable('balance')">Anzahl</th>
                                 <th class="sortable" onclick="sortTable('priceUsd')">Preis (USD)</th>
                                 <th class="sortable" onclick="sortTable('valueUsd')">Wert (USD)</th>
@@ -1132,6 +1143,7 @@
                                 </div>
                             </div>
                         </td>
+                        <td class="token-address-cell" title="${item.tokenAddress}">${item.tokenAddress === 'native' ? 'Native' : item.tokenAddress}</td>
                         <td class="balance">${formatNumber(item.balance)}</td>
                         <td class="balance">${item.priceUsd ? '$' + formatNumber(item.priceUsd) : '-'}</td>
                         <td class="balance">${item.valueUsd ? '$' + formatNumber(item.valueUsd) : '-'}</td>
@@ -1141,7 +1153,7 @@
                 // Mit Gruppierung
                 const grouped = {};
                 allBalances.forEach((item, index) => {
-                    const groupKey = item[groupBy];
+                    const groupKey = item[groupBy] || 'Unbekannt';
                     if (!grouped[groupKey]) {
                         grouped[groupKey] = [];
                     }
@@ -1158,7 +1170,7 @@
                     // Gruppen-Header
                     html += `
                         <tr class="group-header">
-                            <td colspan="5">
+                            <td colspan="6">
                                 <strong>${getGroupLabel(groupBy)}:</strong> ${groupKey.toUpperCase()}
                                 ${subtotal > 0 ? `(Zwischentotal: $${formatNumber(subtotal)})` : ''}
                             </td>
@@ -1179,6 +1191,7 @@
                                         </div>
                                     </div>
                                 </td>
+                                <td class="token-address-cell" title="${item.tokenAddress}">${item.tokenAddress === 'native' ? 'Native' : item.tokenAddress}</td>
                                 <td class="balance">${formatNumber(item.balance)}</td>
                                 <td class="balance">${item.priceUsd ? '$' + formatNumber(item.priceUsd) : '-'}</td>
                                 <td class="balance">${item.valueUsd ? '$' + formatNumber(item.valueUsd) : '-'}</td>
@@ -1190,7 +1203,7 @@
                     if (subtotal > 0) {
                         html += `
                             <tr class="subtotal-row">
-                                <td colspan="4" style="text-align: right;">Zwischentotal ${groupKey}:</td>
+                                <td colspan="5" style="text-align: right;">Zwischentotal ${groupKey}:</td>
                                 <td class="balance">$${formatNumber(subtotal)}</td>
                             </tr>
                         `;
@@ -1202,7 +1215,7 @@
                 if (grandTotal > 0) {
                     html += `
                         <tr class="total-row">
-                            <td colspan="4" style="text-align: right;"><strong>GESAMT-TOTAL:</strong></td>
+                            <td colspan="5" style="text-align: right;"><strong>GESAMT-TOTAL:</strong></td>
                             <td class="balance"><strong>$${formatNumber(grandTotal)}</strong></td>
                         </tr>
                     `;
@@ -1295,6 +1308,7 @@
                             <tr>
                                 <th class="sortable" onclick="sortTable('wallet')">Wallet</th>
                                 <th class="sortable" onclick="sortTable('tokenSymbol')">Token</th>
+                                <th class="sortable" onclick="sortTable('tokenAddress')">Token-Adresse</th>
                                 <th class="sortable" onclick="sortTable('balance')">Anzahl</th>
                                 <th class="sortable" onclick="sortTable('priceUsd')">Preis (USD)</th>
                                 <th class="sortable" onclick="sortTable('valueUsd')">Wert (USD)</th>
