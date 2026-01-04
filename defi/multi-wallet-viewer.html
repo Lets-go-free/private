@@ -164,7 +164,8 @@
 
         .table-wrapper {
             overflow-y: auto;
-            flex: 1;
+            overflow-x: auto;
+            max-height: 60vh;
         }
 
         .table-wrapper::-webkit-scrollbar {
@@ -468,7 +469,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp">Version: 04.01.2026, 23:45:00 (Schweizer Zeit)</div>
+            <div class="timestamp">Version: 05.01.2026, 00:05:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
@@ -496,6 +497,10 @@
             <div class="stat-card">
                 <div class="stat-label">Token gesamt</div>
                 <div class="stat-value" id="tokenCount">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Portfolio-Wert</div>
+                <div class="stat-value" id="portfolioValue">-</div>
             </div>
             <div class="stat-card">
                 <div class="stat-label">Chains</div>
@@ -659,6 +664,60 @@
             eth: 'https://eth.llamarpc.com',
             polygon: 'https://polygon-rpc.com'
         };
+
+        // Chain IDs für DexScreener API
+        const dexScreenerChainIds = {
+            apertum: 'avalanche', // Apertum ist auf Avalanche basiert
+            bsc: 'bsc',
+            eth: 'ethereum',
+            polygon: 'polygon'
+        };
+
+        // Token-Preise von DexScreener API abrufen
+        async function fetchTokenPrice(tokenAddress, chain) {
+            try {
+                // Native Tokens haben fixe Preise von bekannten APIs
+                if (tokenAddress === 'native') {
+                    // Hier könnten wir CoinGecko oder andere APIs für ETH, BNB, etc. nutzen
+                    return null; // Erstmal null, später können wir das erweitern
+                }
+
+                const chainId = dexScreenerChainIds[chain];
+                const url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
+                
+                console.log(`  💰 Hole Preis für ${tokenAddress} auf ${chain}`);
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data && data.pairs && data.pairs.length > 0) {
+                    // Filtere nach der richtigen Chain
+                    const pairsOnChain = data.pairs.filter(pair => 
+                        pair.chainId === chainId || 
+                        pair.chainId === chain
+                    );
+                    
+                    if (pairsOnChain.length > 0) {
+                        // Nimm das Pair mit der höchsten Liquidität
+                        const bestPair = pairsOnChain.reduce((best, current) => {
+                            const bestLiquidity = parseFloat(best.liquidity?.usd || 0);
+                            const currentLiquidity = parseFloat(current.liquidity?.usd || 0);
+                            return currentLiquidity > bestLiquidity ? current : best;
+                        });
+                        
+                        const priceUsd = parseFloat(bestPair.priceUsd);
+                        console.log(`    ✓ Preis gefunden: $${priceUsd}`);
+                        return priceUsd;
+                    }
+                }
+                
+                console.log(`    ⚠️ Kein Preis gefunden`);
+                return null;
+            } catch (error) {
+                console.log(`    ⚠️ Fehler beim Preis-Abruf:`, error.message);
+                return null;
+            }
+        }
 
         // Web3 initialisieren
         function initializeWeb3() {
@@ -857,6 +916,20 @@
 
                                 console.log(`    ✓ Balance: ${balance} ${token.symbol}`);
 
+                                // Token-Preis abrufen
+                                let priceUsd = null;
+                                let valueUsd = null;
+                                
+                                try {
+                                    priceUsd = await fetchTokenPrice(token.address, chain);
+                                    if (priceUsd && balance > 0) {
+                                        valueUsd = balance * priceUsd;
+                                        console.log(`    💵 Wert: $${valueUsd.toFixed(2)}`);
+                                    }
+                                } catch (priceError) {
+                                    console.log(`    ⚠️ Preis-Abruf übersprungen`);
+                                }
+
                                 if (balance > 0) {
                                     allBalances.push({
                                         wallet: wallet.name,
@@ -865,7 +938,9 @@
                                         tokenName: token.name,
                                         chain: chain,
                                         balance: balance,
-                                        tokenAddress: token.address
+                                        tokenAddress: token.address,
+                                        priceUsd: priceUsd,
+                                        valueUsd: valueUsd
                                     });
                                     console.log(`    ✅ Token hinzugefügt (Balance > 0)`);
                                 }
@@ -907,6 +982,8 @@
                                 <th class="sortable" onclick="sortTable('wallet')">Wallet</th>
                                 <th class="sortable" onclick="sortTable('tokenSymbol')">Token</th>
                                 <th class="sortable" onclick="sortTable('balance')">Anzahl</th>
+                                <th class="sortable" onclick="sortTable('priceUsd')">Preis (USD)</th>
+                                <th class="sortable" onclick="sortTable('valueUsd')">Wert (USD)</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody">
@@ -960,6 +1037,8 @@
                         </div>
                     </td>
                     <td class="balance">${formatNumber(item.balance)}</td>
+                    <td class="balance">${item.priceUsd ? '$' + formatNumber(item.priceUsd) : '-'}</td>
+                    <td class="balance">${item.valueUsd ? '$' + formatNumber(item.valueUsd) : '-'}</td>
                 </tr>
             `).join('');
         }
@@ -1035,6 +1114,17 @@
             document.getElementById('walletCount').textContent = wallets.length;
             document.getElementById('tokenCount').textContent = allBalances.length;
             document.getElementById('chainCount').textContent = Object.keys(tokens).length;
+            
+            // Berechne Portfolio-Gesamtwert
+            const totalValue = allBalances.reduce((sum, item) => {
+                return sum + (item.valueUsd || 0);
+            }, 0);
+            
+            if (totalValue > 0) {
+                document.getElementById('portfolioValue').textContent = '$' + formatNumber(totalValue);
+            } else {
+                document.getElementById('portfolioValue').textContent = '-';
+            }
         }
 
         function displayError(message) {
