@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wallet Token Übersicht</title>
+<title>Wallet Token Übersicht mit Kursen</title>
 <style>
   body { font-family: Arial, sans-serif; margin: 20px; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+  table { border-collapse: collapse; width: 100%; }
   th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
   th { background-color: #f2f2f2; }
 </style>
 </head>
 <body>
 
-<h1>Token Übersicht der Wallets</h1>
+<h1>Token Übersicht der Wallets (inkl. Kurs & Wert)</h1>
 
 <table id="tokenTable">
   <thead>
@@ -26,13 +26,14 @@
       <th>Wert (USD)</th>
     </tr>
   </thead>
-  <tbody>
-    <!-- Daten werden hier dynamisch eingefügt -->
-  </tbody>
+  <tbody></tbody>
 </table>
 
 <script>
-// Beispiel-Wallets
+// 🔑 Trage hier deinen Moralis API Key ein:
+const MORALIS_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6ImU2ZDkxMmQ0LTllM2YtNDRjYi1iZGY0LTJhNTI4NWJiOTYyYiIsIm9yZ0lkIjoiNDg4NzA2IiwidXNlcklkIjoiNTAyODE0IiwidHlwZUlkIjoiNjhkYjc5NzgtODM3OC00ZWM0LWI1MzItY2M0NTNhNzYyN2VlIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3Njc1NTQ5OTgsImV4cCI6NDkyMzMxNDk5OH0.obiGSgrzml5fiUiF10cMFU6D-wQ1fpeFazU45LuG9lc";
+
+// Wallets, die abgefragt werden sollen
 const wallets = [
   "0xC7e112D6Db20A4A9213834B2Cb235c34733e6591",
   "0x59dc6669c1eb40df7b36be58812202a09c4491bf",
@@ -40,50 +41,70 @@ const wallets = [
   "0xbE44d90daD6308AE0b762908D70260c62410346E"
 ];
 
-// Platzhalter: Token-Balances abrufen
-async function fetchTokens(wallet) {
-  // In der Realität: Etherscan/Moralis API verwenden
-  return [
-    { address: "0xToken1", name: "TokenA", balance: 100 },
-    { address: "0xToken2", name: "TokenB", balance: 250 }
-  ];
+// Moralis: Token Balances abfragen
+async function getTokenBalances(wallet) {
+  const chain = "eth";  // mainnet
+  const url = `https://deep-index.moralis.io/api/v2.2/${wallet}/erc20?chain=${chain}`;
+  const res = await fetch(url, {
+    headers: { "X-API-Key": MORALIS_API_KEY },
+  });
+  return await res.json();
 }
 
-// Platzhalter: Token-Preis abrufen
-async function fetchTokenPrice(tokenName) {
-  // In der Realität: CoinGecko API oder CoinMarketCap API
-  const prices = {
-    "TokenA": 2.5,   // USD
-    "TokenB": 0.75
-  };
-  return prices[tokenName] || 0;
+// CoinGecko: Preis für Token mittels Contract Address
+async function getPrices(contractAddresses) {
+  // CoinGecko erwartet comma-separated Adressen und chain = ethereum
+  const addresses = contractAddresses.join(",");
+  const url = `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${addresses}&vs_currencies=usd`;
+  const res = await fetch(url);
+  return await res.json();
 }
 
-async function loadTokens() {
+async function loadData() {
   const tbody = document.querySelector("#tokenTable tbody");
   tbody.innerHTML = "";
 
+  // Alle Wallets abarbeiten
   for (const wallet of wallets) {
-    const tokens = await fetchTokens(wallet);
+    // Token Balances holen
+    const tokens = await getTokenBalances(wallet);
+
+    // Liste aller Contract Adressen (für Preis‑Abfrage)
+    const contracts = tokens.map(t => t.token_address);
+
+    // Preise von CoinGecko holen
+    const priceData = await getPrices(contracts);
+
+    // Tabelle füllen
     for (const token of tokens) {
-      const price = await fetchTokenPrice(token.name);
-      const value = (token.balance * price).toFixed(2);
+      const addr = token.token_address;
+      const name = token.symbol || token.name || addr.substring(0,10);
+      const balance = (token.balance / Math.pow(10, token.decimals)).toFixed(4);
+
+      // Preis holen (USD) – falls nicht gefunden, 0
+      const price = priceData[addr.toLowerCase()] 
+                      ? priceData[addr.toLowerCase()].usd 
+                      : 0;
+
+      const valueUSD = (balance * price).toFixed(2);
+
       const row = document.createElement("tr");
       row.innerHTML = `
         <td>${wallet}</td>
-        <td>${token.address}</td>
-        <td>${token.name}</td>
-        <td>${token.balance}</td>
-        <td>$${price}</td>
-        <td>$${value}</td>
+        <td>${addr}</td>
+        <td>${name}</td>
+        <td>${balance}</td>
+        <td>$${price.toFixed(4)}</td>
+        <td>$${valueUSD}</td>
       `;
       tbody.appendChild(row);
     }
   }
 }
 
-// Daten laden
-loadTokens();
+// Starte das Laden
+loadData();
+
 </script>
 
 </body>
