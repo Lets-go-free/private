@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallet Token Übersicht</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+  th { background-color: #f2f2f2; }
+</style>
+</head>
+<body>
+
+<h1>Token Übersicht der Wallets</h1>
+
+<table id="tokenTable">
+  <thead>
+    <tr>
+      <th>Wallet</th>
+      <th>Token Adresse</th>
+      <th>Name</th>
+      <th>Anzahl</th>
+      <th>Kurs (USD)</th>
+      <th>Wert (USD)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- Daten werden hier dynamisch eingefügt -->
+  </tbody>
+</table>
+
+<script>
+// Beispiel-Wallets
+const wallets = [
+  "0xC7e112D6Db20A4A9213834B2Cb235c34733e6591",
+  "0x59dc6669c1eb40df7b36be58812202a09c4491bf",
+  "0x76882e6fc045391ba4f19d8a15ea4d8699ff7382",
+  "0xbE44d90daD6308AE0b762908D70260c62410346E"
+];
+
+// Platzhalter: Token-Balances abrufen
+async function fetchTokens(wallet) {
+  // In der Realität: Etherscan/Moralis API verwenden
+  return [
+    { address: "0xToken1", name: "TokenA", balance: 100 },
+    { address: "0xToken2", name: "TokenB", balance: 250 }
+  ];
+}
+
+// Platzhalter: Token-Preis abrufen
+async function fetchTokenPrice(tokenName) {
+  // In der Realität: CoinGecko API oder CoinMarketCap API
+  const prices = {
+    "TokenA": 2.5,   // USD
+    "TokenB": 0.75
+  };
+  return prices[tokenName] || 0;
+}
+
+async function loadTokens() {
+  const tbody = document.querySelector("#tokenTable tbody");
+  tbody.innerHTML = "";
+
+  for (const wallet of wallets) {
+    const tokens = await fetchTokens(wallet);
+    for (const token of tokens) {
+      const price = await fetchTokenPrice(token.name);
+      const value = (token.balance * price).toFixed(2);
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${wallet}</td>
+        <td>${token.address}</td>
+        <td>${token.name}</td>
+        <td>${token.balance}</td>
+        <td>$${price}</td>
+        <td>$${value}</td>
+      `;
+      tbody.appendChild(row);
+    }
+  }
+}
+
+// Daten laden
+loadTokens();
+</script>
+
+</body>
+</html>
