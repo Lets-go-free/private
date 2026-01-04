@@ -1,8 +1,19 @@
 ﻿// api/wallet.js
+
 const EVM_CHAINS = ["eth","bsc","polygon","avalanche","arbitrum","optimism"];
 const APERTUM_CHAIN_ID = "2786";
 
 export default async function handler(req, res) {
+  // ---- CORS Header setzen ----
+  res.setHeader("Access-Control-Allow-Origin", "*"); // erlaubt alle Domains
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // OPTIONS-Preflight beantworten
+  if(req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   try {
     const wallet = req.query.wallet;
     if(!wallet) return res.status(400).json({ error: "wallet missing" });
