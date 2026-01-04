@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wallet Token Übersicht mit Kursen</title>
+<title>Wallet Token Übersicht multi-chain</title>
 <style>
   body { font-family: Arial, sans-serif; margin: 20px; }
   table { border-collapse: collapse; width: 100%; }
@@ -13,12 +13,13 @@
 </head>
 <body>
 
-<h1>Token Übersicht der Wallets (inkl. Kurs & Wert)</h1>
+<h1>Token Übersicht der Wallets (multi-chain, inkl. Kurs & Wert)</h1>
 
 <table id="tokenTable">
   <thead>
     <tr>
       <th>Wallet</th>
+      <th>Chain</th>
       <th>Token Adresse</th>
       <th>Name</th>
       <th>Anzahl</th>
@@ -30,8 +31,7 @@
 </table>
 
 <script>
-// 🔑 Trage hier deinen Moralis API Key ein:
-const MORALIS_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6ImU2ZDkxMmQ0LTllM2YtNDRjYi1iZGY0LTJhNTI4NWJiOTYyYiIsIm9yZ0lkIjoiNDg4NzA2IiwidXNlcklkIjoiNTAyODE0IiwidHlwZUlkIjoiNjhkYjc5NzgtODM3OC00ZWM0LWI1MzItY2M0NTNhNzYyN2VlIiwidHlwZSI6IlBST0pFQ1QiLCJpYXQiOjE3Njc1NTQ5OTgsImV4cCI6NDkyMzMxNDk5OH0.obiGSgrzml5fiUiF10cMFU6D-wQ1fpeFazU45LuG9lc";
+const MORALIS_API_KEY = "DEIN_MORALIS_KEY_HIER";
 
 // Wallets, die abgefragt werden sollen
 const wallets = [
@@ -41,21 +41,22 @@ const wallets = [
   "0xbE44d90daD6308AE0b762908D70260c62410346E"
 ];
 
-// Moralis: Token Balances abfragen
-async function getTokenBalances(wallet) {
-  const chain = "eth";  // mainnet
+// Chains, die geprüft werden sollen
+const chains = ["eth", "bsc", "polygon", "avalanche", "arbitrum", "optimism"];
+
+// Token Balances für Wallet + Chain abfragen
+async function getTokenBalances(wallet, chain) {
   const url = `https://deep-index.moralis.io/api/v2.2/${wallet}/erc20?chain=${chain}`;
   const res = await fetch(url, {
-    headers: { "X-API-Key": MORALIS_API_KEY },
+    headers: { "X-API-Key": MORALIS_API_KEY }
   });
   return await res.json();
 }
 
-// CoinGecko: Preis für Token mittels Contract Address
-async function getPrices(contractAddresses) {
-  // CoinGecko erwartet comma-separated Adressen und chain = ethereum
-  const addresses = contractAddresses.join(",");
-  const url = `https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${addresses}&vs_currencies=usd`;
+// CoinGecko Preise für mehrere Token (Contract-Adressen) holen
+async function getPrices(contractAddresses, chain) {
+  if(contractAddresses.length === 0) return {};
+  const url = `https://api.coingecko.com/api/v3/simple/token_price/${chain}?contract_addresses=${contractAddresses.join(",")}&vs_currencies=usd`;
   const res = await fetch(url);
   return await res.json();
 }
@@ -64,47 +65,38 @@ async function loadData() {
   const tbody = document.querySelector("#tokenTable tbody");
   tbody.innerHTML = "";
 
-  // Alle Wallets abarbeiten
   for (const wallet of wallets) {
-    // Token Balances holen
-    const tokens = await getTokenBalances(wallet);
+    for (const chain of chains) {
+      const tokens = await getTokenBalances(wallet, chain);
+      if(tokens.length === 0) continue;
 
-    // Liste aller Contract Adressen (für Preis‑Abfrage)
-    const contracts = tokens.map(t => t.token_address);
+      const contracts = tokens.map(t => t.token_address.toLowerCase());
+      const priceData = await getPrices(contracts, chain);
 
-    // Preise von CoinGecko holen
-    const priceData = await getPrices(contracts);
+      for (const token of tokens) {
+        const addr = token.token_address;
+        const name = token.symbol || token.name || addr.substring(0,10);
+        const balance = (token.balance / Math.pow(10, token.decimals)).toFixed(4);
+        const price = priceData[addr.toLowerCase()]?.usd || 0;
+        const valueUSD = (balance * price).toFixed(2);
 
-    // Tabelle füllen
-    for (const token of tokens) {
-      const addr = token.token_address;
-      const name = token.symbol || token.name || addr.substring(0,10);
-      const balance = (token.balance / Math.pow(10, token.decimals)).toFixed(4);
-
-      // Preis holen (USD) – falls nicht gefunden, 0
-      const price = priceData[addr.toLowerCase()] 
-                      ? priceData[addr.toLowerCase()].usd 
-                      : 0;
-
-      const valueUSD = (balance * price).toFixed(2);
-
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${wallet}</td>
-        <td>${addr}</td>
-        <td>${name}</td>
-        <td>${balance}</td>
-        <td>$${price.toFixed(4)}</td>
-        <td>$${valueUSD}</td>
-      `;
-      tbody.appendChild(row);
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${wallet}</td>
+          <td>${chain}</td>
+          <td>${addr}</td>
+          <td>${name}</td>
+          <td>${balance}</td>
+          <td>$${price.toFixed(4)}</td>
+          <td>$${valueUSD}</td>
+        `;
+        tbody.appendChild(row);
+      }
     }
   }
 }
 
-// Starte das Laden
 loadData();
-
 </script>
 
 </body>
