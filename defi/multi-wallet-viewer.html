@@ -266,6 +266,42 @@
             display: none;
         }
 
+        tr.group-header {
+            background: #edf2f7;
+            font-weight: 600;
+        }
+
+        tr.group-header td {
+            padding: 12px 15px;
+            color: #2d3748;
+            font-size: 14px;
+            border-top: 2px solid #cbd5e0;
+        }
+
+        tr.subtotal-row {
+            background: #f7fafc;
+            font-weight: 600;
+            border-top: 1px solid #cbd5e0;
+        }
+
+        tr.subtotal-row td {
+            color: #4a5568;
+            font-style: italic;
+        }
+
+        tr.total-row {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            font-weight: 700;
+            border-top: 2px solid #667eea;
+            border-bottom: 2px solid #667eea;
+        }
+
+        tr.total-row td {
+            color: #2d3748;
+            font-size: 14px;
+            padding: 15px;
+        }
+
         td {
             padding: 10px 15px;
             color: #4a5568;
@@ -469,7 +505,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp">Version: 04.01.2026, 23:50:00 (Schweizer Zeit)</div>
+            <div class="timestamp">Version: 05.01.2026, 00:10:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
@@ -480,9 +516,24 @@
                 </select>
             </div>
             <div class="filter-group">
+                <label for="chainFilter">Chain:</label>
+                <select id="chainFilter" class="filter-select">
+                    <option value="">Alle Chains</option>
+                </select>
+            </div>
+            <div class="filter-group">
                 <label for="tokenFilter">Token:</label>
                 <select id="tokenFilter" class="filter-select">
                     <option value="">Alle Token</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="groupByFilter">Gruppierung:</label>
+                <select id="groupByFilter" class="filter-select">
+                    <option value="none">Keine</option>
+                    <option value="wallet">Nach Wallet</option>
+                    <option value="chain">Nach Chain</option>
+                    <option value="token">Nach Token</option>
                 </select>
             </div>
             <button class="btn btn-primary" onclick="loadAllWallets()">🔄 Aktualisieren</button>
@@ -1041,6 +1092,17 @@
                 walletFilter.appendChild(option);
             });
 
+            // Unique Chains sammeln
+            const uniqueChains = [...new Set(allBalances.map(item => item.chain))].sort();
+            const chainFilter = document.getElementById('chainFilter');
+            chainFilter.innerHTML = '<option value="">Alle Chains</option>';
+            uniqueChains.forEach(chain => {
+                const option = document.createElement('option');
+                option.value = chain;
+                option.textContent = chain.toUpperCase();
+                chainFilter.appendChild(option);
+            });
+
             // Unique Tokens sammeln
             const uniqueTokens = [...new Set(allBalances.map(item => item.tokenSymbol))].sort();
             const tokenFilter = document.getElementById('tokenFilter');
@@ -1054,23 +1116,109 @@
         }
 
         function generateTableRows() {
-            return allBalances.map((item, index) => `
-                <tr data-index="${index}">
-                    <td class="wallet-name">${item.wallet}</td>
-                    <td>
-                        <div class="token-info">
-                            <div class="token-icon">${item.tokenSymbol.charAt(0)}</div>
-                            <div class="token-details">
-                                <div class="token-symbol">${item.tokenSymbol}</div>
-                                <div class="token-chain">${item.chain}</div>
+            const groupBy = document.getElementById('groupByFilter')?.value || 'none';
+            
+            if (groupBy === 'none') {
+                // Keine Gruppierung - normale Tabelle
+                return allBalances.map((item, index) => `
+                    <tr data-index="${index}">
+                        <td class="wallet-name">${item.wallet}</td>
+                        <td>
+                            <div class="token-info">
+                                <div class="token-icon">${item.tokenSymbol.charAt(0)}</div>
+                                <div class="token-details">
+                                    <div class="token-symbol">${item.tokenSymbol}</div>
+                                    <div class="token-chain">${item.chain}</div>
+                                </div>
                             </div>
-                        </div>
-                    </td>
-                    <td class="balance">${formatNumber(item.balance)}</td>
-                    <td class="balance">${item.priceUsd ? '$' + formatNumber(item.priceUsd) : '-'}</td>
-                    <td class="balance">${item.valueUsd ? '$' + formatNumber(item.valueUsd) : '-'}</td>
-                </tr>
-            `).join('');
+                        </td>
+                        <td class="balance">${formatNumber(item.balance)}</td>
+                        <td class="balance">${item.priceUsd ? '$' + formatNumber(item.priceUsd) : '-'}</td>
+                        <td class="balance">${item.valueUsd ? '$' + formatNumber(item.valueUsd) : '-'}</td>
+                    </tr>
+                `).join('');
+            } else {
+                // Mit Gruppierung
+                const grouped = {};
+                allBalances.forEach((item, index) => {
+                    const groupKey = item[groupBy];
+                    if (!grouped[groupKey]) {
+                        grouped[groupKey] = [];
+                    }
+                    grouped[groupKey].push({ ...item, originalIndex: index });
+                });
+
+                let html = '';
+                const groupKeys = Object.keys(grouped).sort();
+                
+                groupKeys.forEach(groupKey => {
+                    const items = grouped[groupKey];
+                    const subtotal = items.reduce((sum, item) => sum + (item.valueUsd || 0), 0);
+                    
+                    // Gruppen-Header
+                    html += `
+                        <tr class="group-header">
+                            <td colspan="5">
+                                <strong>${getGroupLabel(groupBy)}:</strong> ${groupKey.toUpperCase()}
+                                ${subtotal > 0 ? `(Zwischentotal: $${formatNumber(subtotal)})` : ''}
+                            </td>
+                        </tr>
+                    `;
+                    
+                    // Einträge in dieser Gruppe
+                    items.forEach(item => {
+                        html += `
+                            <tr data-index="${item.originalIndex}">
+                                <td class="wallet-name">${item.wallet}</td>
+                                <td>
+                                    <div class="token-info">
+                                        <div class="token-icon">${item.tokenSymbol.charAt(0)}</div>
+                                        <div class="token-details">
+                                            <div class="token-symbol">${item.tokenSymbol}</div>
+                                            <div class="token-chain">${item.chain}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="balance">${formatNumber(item.balance)}</td>
+                                <td class="balance">${item.priceUsd ? '$' + formatNumber(item.priceUsd) : '-'}</td>
+                                <td class="balance">${item.valueUsd ? '$' + formatNumber(item.valueUsd) : '-'}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    // Zwischentotal-Zeile
+                    if (subtotal > 0) {
+                        html += `
+                            <tr class="subtotal-row">
+                                <td colspan="4" style="text-align: right;">Zwischentotal ${groupKey}:</td>
+                                <td class="balance">$${formatNumber(subtotal)}</td>
+                            </tr>
+                        `;
+                    }
+                });
+                
+                // Gesamt-Total
+                const grandTotal = allBalances.reduce((sum, item) => sum + (item.valueUsd || 0), 0);
+                if (grandTotal > 0) {
+                    html += `
+                        <tr class="total-row">
+                            <td colspan="4" style="text-align: right;"><strong>GESAMT-TOTAL:</strong></td>
+                            <td class="balance"><strong>$${formatNumber(grandTotal)}</strong></td>
+                        </tr>
+                    `;
+                }
+                
+                return html;
+            }
+        }
+
+        function getGroupLabel(groupBy) {
+            const labels = {
+                'wallet': 'Wallet',
+                'chain': 'Chain',
+                'token': 'Token'
+            };
+            return labels[groupBy] || groupBy;
         }
 
         function sortTable(column) {
@@ -1123,21 +1271,44 @@
 
         function applyFilters() {
             const walletFilter = document.getElementById('walletFilter').value;
+            const chainFilter = document.getElementById('chainFilter').value;
             const tokenFilter = document.getElementById('tokenFilter').value;
 
-            const rows = document.querySelectorAll('#tableBody tr');
-            
-            rows.forEach((row, index) => {
-                const item = allBalances[index];
+            // Filtere die Daten
+            const filteredBalances = allBalances.filter(item => {
                 const matchesWallet = !walletFilter || item.wallet === walletFilter;
+                const matchesChain = !chainFilter || item.chain === chainFilter;
                 const matchesToken = !tokenFilter || item.tokenSymbol === tokenFilter;
-
-                if (matchesWallet && matchesToken) {
-                    row.classList.remove('hidden');
-                } else {
-                    row.classList.add('hidden');
-                }
+                return matchesWallet && matchesChain && matchesToken;
             });
+
+            // Erstelle temporäres Array für gefilterte Anzeige
+            const tempAllBalances = allBalances;
+            allBalances = filteredBalances;
+            
+            // Tabelle neu generieren
+            const tbody = document.getElementById('tableBody');
+            if (tbody) {
+                tbody.parentElement.parentElement.innerHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="sortTable('wallet')">Wallet</th>
+                                <th class="sortable" onclick="sortTable('tokenSymbol')">Token</th>
+                                <th class="sortable" onclick="sortTable('balance')">Anzahl</th>
+                                <th class="sortable" onclick="sortTable('priceUsd')">Preis (USD)</th>
+                                <th class="sortable" onclick="sortTable('valueUsd')">Wert (USD)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            ${generateTableRows()}
+                        </tbody>
+                    </table>
+                `;
+            }
+            
+            // Stelle Original-Array wieder her
+            allBalances = tempAllBalances;
         }
 
         function updateStats() {
@@ -1203,7 +1374,9 @@
 
         // Event Listener für Filter
         document.getElementById('walletFilter').addEventListener('change', applyFilters);
+        document.getElementById('chainFilter').addEventListener('change', applyFilters);
         document.getElementById('tokenFilter').addEventListener('change', applyFilters);
+        document.getElementById('groupByFilter').addEventListener('change', applyFilters);
     </script>
 </body>
 </html>
