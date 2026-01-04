@@ -1,4 +1,4 @@
-﻿// wallet.js
+﻿// api/wallet.js
 const EVM_CHAINS = ["eth","bsc","polygon","avalanche","arbitrum","optimism"];
 const APERTUM_CHAIN_ID = "2786";
 
@@ -12,15 +12,15 @@ export default async function handler(req, res) {
 
     let allTokens = [];
 
-    // EVM Chains
+    // --- EVM Chains ---
     for(const chain of EVM_CHAINS){
-      // ERC-20
+      // ERC-20 Tokens
       const ercRes = await fetch(`https://deep-index.moralis.io/api/v2.2/${wallet}/erc20?chain=${chain}`, {
         headers: { "X-API-Key": MORALIS_KEY }
       });
       const ercJson = ercRes.ok ? await ercRes.json() : [];
 
-      // Native
+      // Native Balance
       const balRes = await fetch(`https://deep-index.moralis.io/api/v2.2/${wallet}/balance?chain=${chain}`, {
         headers: { "X-API-Key": MORALIS_KEY }
       });
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
       allTokens.push(...ercJson.map(t => ({ ...t, chain })));
     }
 
-    // Apertum Chain
+    // --- Apertum Chain ---
     const aptRes = await fetch(`https://deep-index.moralis.io/api/v2.2/${wallet}/balance?chain=${APERTUM_CHAIN_ID}`, {
       headers: { "X-API-Key": MORALIS_KEY }
     });
