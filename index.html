@@ -1,61 +1,44 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Wallet Token Übersicht (Multi-Chain)</title>
-
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      font-size: 14px;
-    }
-    th {
-      background-color: #f2f2f2;
-    }
-    tfoot td {
-      font-weight: bold;
-      background: #fafafa;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallet Übersicht Multi-Chain + Aptos</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+th { background-color: #f2f2f2; }
+</style>
 </head>
 <body>
 
-<h1>Wallet Token Übersicht (Multi-Chain)</h1>
+<h1>Wallet Übersicht Multi-Chain + Aptos</h1>
 
 <table id="tokenTable">
-  <thead>
-    <tr>
-      <th>Wallet</th>
-      <th>Chain</th>
-      <th>Token Adresse</th>
-      <th>Name</th>
-      <th>Anzahl</th>
-      <th>Kurs (USD)</th>
-      <th>Wert (USD)</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
+<thead>
+<tr>
+  <th>Wallet</th>
+  <th>Chain</th>
+  <th>Token Adresse</th>
+  <th>Name</th>
+  <th>Anzahl</th>
+  <th>Kurs (USD)</th>
+  <th>Wert (USD)</th>
+</tr>
+</thead>
+<tbody></tbody>
+<tfoot>
+<tr>
+  <td colspan="6" style="text-align:right"><strong>Gesamtwert pro Wallet:</strong></td>
+  <td id="totalValue">0</td>
+</tr>
+</tfoot>
 </table>
 
 <script>
-/* =============================
-   KONFIGURATION
-============================= */
+const API_BASE = "https://private-seven-henna.vercel.app/"; // <-- hier Vercel URL eintragen
 
-// 🔁 HIER deine Vercel-URL eintragen
-const API_BASE = "https://private-seven-henna.vercel.app/";
-
-// Wallets
 const wallets = [
   "0xC7e112D6Db20A4A9213834B2Cb235c34733e6591",
   "0x59dc6669c1eb40df7b36be58812202a09c4491bf",
@@ -63,76 +46,73 @@ const wallets = [
   "0xbE44d90daD6308AE0b762908D70260c62410346E"
 ];
 
-// Unterstützte Chains
-const chains = [
-  "eth",
-  "bsc",
-  "polygon",
-  "avalanche",
-  "arbitrum",
-  "optimism"
-];
-
-/* =============================
-   API FUNKTIONEN
-============================= */
-
-async function getTokenBalances(wallet, chain) {
-  const res = await fetch(
-    `${API_BASE}/wallet?wallet=${wallet}&chain=${chain}`
-  );
-  return await res.json();
-}
+const chainMap = {
+  eth: "ethereum",
+  bsc: "binance-smart-chain",
+  polygon: "polygon-pos",
+  avalanche: "avalanche",
+  arbitrum: "arbitrum-one",
+  optimism: "optimistic-ethereum",
+  apertum: "apertum"
+};
 
 async function getPrices(chain, contracts) {
-  if (contracts.length === 0) return {};
-  const url =
-    `https://api.coingecko.com/api/v3/simple/token_price/${chain}` +
-    `?contract_addresses=${contracts.join(",")}&vs_currencies=usd`;
+  if(contracts.length === 0) return {};
+  const url = `https://api.coingecko.com/api/v3/simple/token_price/${chain}?contract_addresses=${contracts.join(",")}&vs_currencies=usd`;
   const res = await fetch(url);
   return await res.json();
 }
-
-/* =============================
-   HAUPTLOGIK
-============================= */
 
 async function loadData() {
   const tbody = document.querySelector("#tokenTable tbody");
   tbody.innerHTML = "";
 
-  for (const wallet of wallets) {
-    for (const chain of chains) {
+  for(const wallet of wallets){
+    try {
+      const tokensRes = await fetch(`${API_BASE}/wallet?wallet=${wallet}`);
+      const tokens = await tokensRes.json();
+      let totalWallet = 0;
 
-      const tokens = await getTokenBalances(wallet, chain);
-      if (!Array.isArray(tokens) || tokens.length === 0) continue;
+      const ercContracts = tokens.filter(t => !t.token_address.includes("-native") && t.chain !== "aptos").map(t=>t.token_address.toLowerCase());
 
-      const contracts = tokens.map(t => t.token_address.toLowerCase());
-      const prices = await getPrices(chain, contracts);
+      // CoinGecko Preis abrufen für ERC20 (ohne Aptos)
+      const prices = await getPrices("ethereum", ercContracts);
 
-      for (const token of tokens) {
-        const balance =
-          token.balance / Math.pow(10, token.decimals);
+      for(const t of tokens){
+        const balance = t.balance / Math.pow(10, t.decimals);
+        let price = 0;
 
-        if (balance <= 0) continue;
-
-        const price =
-          prices[token.token_address.toLowerCase()]?.usd || 0;
+        if(t.chain === "aptos") {
+          // CoinGecko Aptos Preis
+          const aptRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=aptos&vs_currencies=usd");
+          const aptPrice = await aptRes.json();
+          price = aptPrice.aptos.usd;
+        } else if(!t.token_address.includes("-native")) {
+          price = prices[t.token_address.toLowerCase()]?.usd || 0;
+        }
 
         const value = balance * price;
+        totalWallet += value;
 
         const row = document.createElement("tr");
         row.innerHTML = `
           <td>${wallet}</td>
-          <td>${chain}</td>
-          <td>${token.token_address}</td>
-          <td>${token.symbol || token.name || "?"}</td>
+          <td>${t.chain}</td>
+          <td>${t.token_address}</td>
+          <td>${t.symbol}</td>
           <td>${balance.toFixed(4)}</td>
           <td>$${price.toFixed(4)}</td>
           <td>$${value.toFixed(2)}</td>
         `;
         tbody.appendChild(row);
       }
+
+      // Gesamtwert pro Wallet in Footer
+      const totalCell = document.getElementById("totalValue");
+      totalCell.innerText = `$${totalWallet.toFixed(2)}`;
+
+    } catch(err){
+      console.error("Fehler bei Wallet:", wallet, err);
     }
   }
 }
