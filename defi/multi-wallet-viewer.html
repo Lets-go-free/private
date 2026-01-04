@@ -312,9 +312,120 @@
                 padding: 10px;
             }
         }
+
+        /* Password Protection Styles */
+        .login-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .login-box h2 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .login-box p {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .password-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 16px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+
+        .password-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .app-content {
+            display: none;
+        }
+
+        .app-content.unlocked {
+            display: block;
+        }
     </style>
 </head>
 <body>
+    <!-- Password Protection -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-box">
+            <h2>🔐 Zugriff geschützt</h2>
+            <p>Bitte Passwort eingeben, um fortzufahren</p>
+            <div class="error-message" id="errorMessage">
+                Falsches Passwort. Bitte versuche es erneut.
+            </div>
+            <input 
+                type="password" 
+                id="passwordInput" 
+                class="password-input" 
+                placeholder="Passwort eingeben..."
+                onkeypress="if(event.key === 'Enter') checkPassword()"
+            >
+            <button class="login-btn" onclick="checkPassword()">Anmelden</button>
+        </div>
+    </div>
+
+    <!-- Main App Content -->
+    <div class="app-content" id="appContent">
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
@@ -361,9 +472,74 @@
             </div>
         </div>
     </div>
+    <!-- End Main App Content -->
 
     <script src="https://cdn.jsdelivr.net/npm/web3@4.3.0/dist/web3.min.js"></script>
     <script>
+        // ============================================
+        // PASSWORD PROTECTION
+        // ============================================
+        // WICHTIG: Ändere das Passwort hier!
+        const correctPasswordHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'; // Standard: "" (leer)
+        
+        // SHA-256 Hash Funktion
+        async function hashPassword(password) {
+            const msgBuffer = new TextEncoder().encode(password);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        async function checkPassword() {
+            const passwordInput = document.getElementById('passwordInput');
+            const password = passwordInput.value;
+            const errorMessage = document.getElementById('errorMessage');
+
+            const hash = await hashPassword(password);
+
+            if (hash === correctPasswordHash) {
+                // Passwort korrekt
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('appContent').classList.add('unlocked');
+                
+                // Session speichern (optional)
+                sessionStorage.setItem('authenticated', 'true');
+                
+                // Warte bis Web3 geladen ist, dann App starten
+                initializeApp();
+            } else {
+                // Passwort falsch
+                errorMessage.classList.add('show');
+                passwordInput.value = '';
+                passwordInput.focus();
+                
+                // Fehlermeldung nach 3 Sekunden ausblenden
+                setTimeout(() => {
+                    errorMessage.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Prüfen ob bereits authentifiziert (Session)
+        window.addEventListener('DOMContentLoaded', () => {
+            if (sessionStorage.getItem('authenticated') === 'true') {
+                document.getElementById('loginOverlay').style.display = 'none';
+                document.getElementById('appContent').classList.add('unlocked');
+                initializeApp();
+            } else {
+                document.getElementById('passwordInput').focus();
+            }
+        });
+
+        // ============================================
+        // MAIN APPLICATION CODE
+        // ============================================
+        
+        // Globale Variablen
+        let web3Instances = {};
+        let allBalances = [];
+        let currentSort = { column: null, direction: 'asc' };
+
         // Wallet-Konfiguration
         const wallets = [
             { name: 'dao1 Dubai', address: '0xC7e112D6Db20A4A9213834B2Cb235c34733e6591' },
@@ -408,10 +584,29 @@
             polygon: 'https://polygon-rpc.com'
         };
 
-        // Web3 Instanzen
-        const web3Instances = {};
-        for (const [chain, rpc] of Object.entries(rpcEndpoints)) {
-            web3Instances[chain] = new Web3(rpc);
+        // Web3 initialisieren
+        function initializeWeb3() {
+            console.log('🔧 Initialisiere Web3...');
+            if (typeof Web3 === 'undefined') {
+                console.error('❌ Web3 ist nicht geladen!');
+                displayError('Web3-Bibliothek konnte nicht geladen werden. Bitte lade die Seite neu.');
+                return false;
+            }
+
+            web3Instances = {};
+            for (const [chain, rpc] of Object.entries(rpcEndpoints)) {
+                web3Instances[chain] = new Web3(rpc);
+                console.log(`  ✓ Web3 für ${chain} initialisiert`);
+            }
+            return true;
+        }
+
+        // App initialisieren
+        function initializeApp() {
+            if (initializeWeb3()) {
+                updateTimestamp();
+                loadAllWallets();
+            }
         }
 
         // ERC-20 ABI
@@ -425,40 +620,63 @@
             }
         ];
 
-        let allBalances = [];
-        let currentSort = { column: null, direction: 'asc' };
-
         async function loadAllWallets() {
             try {
+                console.log('🚀 Starte Laden der Wallets...');
                 const content = document.getElementById('tableContent');
                 content.innerHTML = `
                     <div class="loading">
                         <div class="spinner"></div>
                         <p>Lade Token-Daten von allen Chains...</p>
+                        <p style="font-size: 12px; margin-top: 10px;" id="loadingStatus"></p>
                     </div>
                 `;
 
                 allBalances = [];
+                let processed = 0;
+                let total = 0;
+
+                // Zähle total Abfragen
+                for (const wallet of wallets) {
+                    for (const [chain, tokenList] of Object.entries(tokens)) {
+                        total += tokenList.length;
+                    }
+                }
+
+                console.log(`📊 Total zu ladende Token: ${total}`);
 
                 // Für jedes Wallet alle Token auf allen Chains laden
                 for (const wallet of wallets) {
+                    console.log(`👛 Lade Wallet: ${wallet.name}`);
+                    
                     for (const [chain, tokenList] of Object.entries(tokens)) {
+                        console.log(`⛓️ Chain: ${chain}`);
                         const web3 = web3Instances[chain];
                         
                         for (const token of tokenList) {
                             try {
+                                processed++;
+                                const statusEl = document.getElementById('loadingStatus');
+                                if (statusEl) {
+                                    statusEl.textContent = `${processed} von ${total} Token geladen...`;
+                                }
+
                                 let balance;
                                 
                                 if (token.address === 'native') {
                                     // Native Token (ETH, BNB, etc.)
+                                    console.log(`  🪙 Lade Native Token: ${token.symbol}`);
                                     const weiBalance = await web3.eth.getBalance(wallet.address);
                                     balance = parseFloat(web3.utils.fromWei(weiBalance, 'ether'));
                                 } else {
                                     // ERC-20 Token
+                                    console.log(`  🪙 Lade ERC-20 Token: ${token.symbol}`);
                                     const contract = new web3.eth.Contract(ERC20_ABI, token.address);
                                     const rawBalance = await contract.methods.balanceOf(wallet.address).call();
                                     balance = parseFloat(rawBalance) / Math.pow(10, token.decimals);
                                 }
+
+                                console.log(`    ✓ Balance: ${balance} ${token.symbol}`);
 
                                 if (balance > 0) {
                                     allBalances.push({
@@ -470,20 +688,22 @@
                                         balance: balance,
                                         tokenAddress: token.address
                                     });
+                                    console.log(`    ✅ Token hinzugefügt (Balance > 0)`);
                                 }
                             } catch (error) {
-                                console.error(`Fehler bei ${wallet.name} - ${token.symbol} auf ${chain}:`, error);
+                                console.error(`❌ Fehler bei ${wallet.name} - ${token.symbol} auf ${chain}:`, error.message);
                             }
                         }
                     }
                 }
 
+                console.log(`✅ Laden abgeschlossen. ${allBalances.length} Token mit Balance gefunden.`);
                 displayTable();
                 updateStats();
 
             } catch (error) {
-                console.error('Fehler beim Laden:', error);
-                displayError('Fehler beim Laden der Wallet-Daten. Bitte versuche es später nochmal.');
+                console.error('💥 Kritischer Fehler beim Laden:', error);
+                displayError('Fehler beim Laden der Wallet-Daten: ' + error.message);
             }
         }
 
@@ -654,10 +874,6 @@
         // Event Listener für Filter
         document.getElementById('walletFilter').addEventListener('input', applyFilters);
         document.getElementById('tokenFilter').addEventListener('input', applyFilters);
-
-        // Beim Laden der Seite
-        updateTimestamp();
-        loadAllWallets();
     </script>
 </body>
 </html>
