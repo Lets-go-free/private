@@ -66,14 +66,25 @@
             color: #4a5568;
             font-size: 14px;
             font-weight: 600;
+            white-space: nowrap;
         }
 
-        .filter-input {
+        .filter-input, .filter-select {
             padding: 8px 12px;
             border: 1px solid #e2e8f0;
             border-radius: 6px;
             font-size: 14px;
             min-width: 200px;
+            background: white;
+        }
+
+        .filter-select {
+            cursor: pointer;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: #667eea;
         }
 
         .btn {
@@ -136,6 +147,9 @@
             border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            max-height: 70vh;
         }
 
         .table-header {
@@ -145,6 +159,29 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-shrink: 0;
+        }
+
+        .table-wrapper {
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .table-wrapper::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .table-wrapper::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .table-wrapper::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 5px;
+        }
+
+        .table-wrapper::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
         }
 
         .table-header h2 {
@@ -185,11 +222,11 @@
         }
 
         th {
-            padding: 15px 20px;
+            padding: 12px 15px;
             text-align: left;
             font-weight: 600;
             color: #2d3748;
-            font-size: 14px;
+            font-size: 13px;
             border-bottom: 2px solid #e2e8f0;
             cursor: pointer;
             user-select: none;
@@ -202,7 +239,7 @@
         th.sortable::after {
             content: ' ⇅';
             opacity: 0.3;
-            font-size: 12px;
+            font-size: 11px;
         }
 
         th.sort-asc::after {
@@ -229,9 +266,9 @@
         }
 
         td {
-            padding: 15px 20px;
+            padding: 10px 15px;
             color: #4a5568;
-            font-size: 14px;
+            font-size: 13px;
         }
 
         .wallet-name {
@@ -246,8 +283,8 @@
         }
 
         .token-icon {
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             border-radius: 50%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             display: flex;
@@ -255,7 +292,7 @@
             justify-content: center;
             color: white;
             font-weight: 600;
-            font-size: 12px;
+            font-size: 11px;
         }
 
         .token-details {
@@ -266,10 +303,11 @@
         .token-symbol {
             font-weight: 600;
             color: #2d3748;
+            font-size: 13px;
         }
 
         .token-chain {
-            font-size: 11px;
+            font-size: 10px;
             color: #a0aec0;
             text-transform: uppercase;
         }
@@ -278,6 +316,7 @@
             font-weight: 600;
             color: #2d3748;
             text-align: right;
+            font-size: 13px;
         }
 
         .error {
@@ -429,17 +468,21 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp">Version: 04.01.2026, 23:35:00 (Schweizer Zeit)</div>
+            <div class="timestamp">Version: 04.01.2026, 23:45:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
             <div class="filter-group">
                 <label for="walletFilter">Wallet:</label>
-                <input type="text" id="walletFilter" class="filter-input" placeholder="Wallet filtern...">
+                <select id="walletFilter" class="filter-select">
+                    <option value="">Alle Wallets</option>
+                </select>
             </div>
             <div class="filter-group">
                 <label for="tokenFilter">Token:</label>
-                <input type="text" id="tokenFilter" class="filter-input" placeholder="Token filtern...">
+                <select id="tokenFilter" class="filter-select">
+                    <option value="">Alle Token</option>
+                </select>
             </div>
             <button class="btn btn-primary" onclick="loadAllWallets()">🔄 Aktualisieren</button>
             <button class="btn btn-secondary" onclick="scanForMoreTokens()">🔍 Weitere Token scannen</button>
@@ -857,21 +900,50 @@
             }
 
             const tableHTML = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="sortable" onclick="sortTable('wallet')">Wallet</th>
-                            <th class="sortable" onclick="sortTable('tokenSymbol')">Token</th>
-                            <th class="sortable" onclick="sortTable('balance')">Anzahl</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        ${generateTableRows()}
-                    </tbody>
-                </table>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="sortTable('wallet')">Wallet</th>
+                                <th class="sortable" onclick="sortTable('tokenSymbol')">Token</th>
+                                <th class="sortable" onclick="sortTable('balance')">Anzahl</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            ${generateTableRows()}
+                        </tbody>
+                    </table>
+                </div>
             `;
 
             content.innerHTML = tableHTML;
+            
+            // Filter-Dropdowns befüllen
+            populateFilters();
+        }
+
+        function populateFilters() {
+            // Unique Wallets sammeln
+            const uniqueWallets = [...new Set(allBalances.map(item => item.wallet))].sort();
+            const walletFilter = document.getElementById('walletFilter');
+            walletFilter.innerHTML = '<option value="">Alle Wallets</option>';
+            uniqueWallets.forEach(wallet => {
+                const option = document.createElement('option');
+                option.value = wallet;
+                option.textContent = wallet;
+                walletFilter.appendChild(option);
+            });
+
+            // Unique Tokens sammeln
+            const uniqueTokens = [...new Set(allBalances.map(item => item.tokenSymbol))].sort();
+            const tokenFilter = document.getElementById('tokenFilter');
+            tokenFilter.innerHTML = '<option value="">Alle Token</option>';
+            uniqueTokens.forEach(token => {
+                const option = document.createElement('option');
+                option.value = token;
+                option.textContent = token;
+                tokenFilter.appendChild(option);
+            });
         }
 
         function generateTableRows() {
@@ -941,15 +1013,15 @@
         }
 
         function applyFilters() {
-            const walletFilter = document.getElementById('walletFilter').value.toLowerCase();
-            const tokenFilter = document.getElementById('tokenFilter').value.toLowerCase();
+            const walletFilter = document.getElementById('walletFilter').value;
+            const tokenFilter = document.getElementById('tokenFilter').value;
 
             const rows = document.querySelectorAll('#tableBody tr');
             
             rows.forEach((row, index) => {
                 const item = allBalances[index];
-                const matchesWallet = item.wallet.toLowerCase().includes(walletFilter);
-                const matchesToken = item.tokenSymbol.toLowerCase().includes(tokenFilter);
+                const matchesWallet = !walletFilter || item.wallet === walletFilter;
+                const matchesToken = !tokenFilter || item.tokenSymbol === tokenFilter;
 
                 if (matchesWallet && matchesToken) {
                     row.classList.remove('hidden');
@@ -1010,8 +1082,8 @@
         }
 
         // Event Listener für Filter
-        document.getElementById('walletFilter').addEventListener('input', applyFilters);
-        document.getElementById('tokenFilter').addEventListener('input', applyFilters);
+        document.getElementById('walletFilter').addEventListener('change', applyFilters);
+        document.getElementById('tokenFilter').addEventListener('change', applyFilters);
     </script>
 </body>
 </html>
