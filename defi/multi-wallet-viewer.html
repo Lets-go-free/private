@@ -474,13 +474,29 @@
     </div>
     <!-- End Main App Content -->
 
-    <script src="https://cdn.jsdelivr.net/npm/web3@4.3.0/dist/web3.min.js"></script>
+    <!-- Try multiple CDN sources for Web3 -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@4.3.0/dist/web3.min.js" onerror="loadWeb3Fallback()"></script>
+    <script>
+        // Fallback CDN wenn jsdelivr nicht funktioniert
+        function loadWeb3Fallback() {
+            console.log('⚠️ Haupt-CDN fehlgeschlagen, versuche Fallback...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/web3@4.3.0/dist/web3.min.js';
+            script.onerror = function() {
+                console.log('⚠️ Fallback fehlgeschlagen, versuche älteren CDN...');
+                const script2 = document.createElement('script');
+                script2.src = 'https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js';
+                document.head.appendChild(script2);
+            };
+            document.head.appendChild(script);
+        }
+    </script>
     <script>
         // ============================================
         // PASSWORD PROTECTION
         // ============================================
         // WICHTIG: Ändere das Passwort hier!
-        const correctPasswordHash = 'dcd81f216ef69995d9df024e5089120a03399795ba4e56fc03c0dddb12ea2e7e'; // Standard: "" (leer)
+        const correctPasswordHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'; // Standard: "" (leer)
         
         // SHA-256 Hash Funktion
         async function hashPassword(password) {
@@ -587,23 +603,60 @@
         // Web3 initialisieren
         function initializeWeb3() {
             console.log('🔧 Initialisiere Web3...');
-            if (typeof Web3 === 'undefined') {
-                console.error('❌ Web3 ist nicht geladen!');
-                displayError('Web3-Bibliothek konnte nicht geladen werden. Bitte lade die Seite neu.');
-                return false;
+            console.log('Prüfe ob Web3 verfügbar ist...');
+            console.log('typeof Web3:', typeof Web3);
+            
+            // Prüfen ob Web3 bereits geladen ist
+            if (typeof Web3 !== 'undefined') {
+                console.log('✓ Web3 ist bereits geladen');
+                createWeb3Instances();
+                return Promise.resolve(true);
             }
 
+            console.log('⏳ Warte auf Web3-Load...');
+
+            // Warten auf Web3-Load
+            return new Promise((resolve) => {
+                let attempts = 0;
+                const maxAttempts = 100; // 10 Sekunden
+
+                const checkWeb3 = setInterval(() => {
+                    attempts++;
+                    console.log(`Versuch ${attempts}/${maxAttempts} - Web3 Status:`, typeof Web3);
+
+                    if (typeof Web3 !== 'undefined') {
+                        console.log('✓ Web3 erfolgreich geladen nach', attempts * 100, 'ms');
+                        clearInterval(checkWeb3);
+                        createWeb3Instances();
+                        resolve(true);
+                    }
+
+                    if (attempts >= maxAttempts) {
+                        clearInterval(checkWeb3);
+                        console.error('❌ Web3 konnte nicht geladen werden nach', attempts * 100, 'ms');
+                        console.error('Mögliche Ursachen:');
+                        console.error('- CDN ist blockiert (Firewall, AdBlocker)');
+                        console.error('- Keine Internetverbindung');
+                        console.error('- Browser-Extension blockiert Script');
+                        displayError('Web3-Bibliothek konnte nicht geladen werden. Bitte prüfe deine Internetverbindung und Browser-Extensions (AdBlocker, etc.)');
+                        resolve(false);
+                    }
+                }, 100);
+            });
+        }
+
+        function createWeb3Instances() {
             web3Instances = {};
             for (const [chain, rpc] of Object.entries(rpcEndpoints)) {
                 web3Instances[chain] = new Web3(rpc);
                 console.log(`  ✓ Web3 für ${chain} initialisiert`);
             }
-            return true;
         }
 
         // App initialisieren
-        function initializeApp() {
-            if (initializeWeb3()) {
+        async function initializeApp() {
+            const web3Ready = await initializeWeb3();
+            if (web3Ready) {
                 updateTimestamp();
                 loadAllWallets();
             }
