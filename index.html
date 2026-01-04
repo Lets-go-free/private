@@ -3,17 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wallet Übersicht Multi-Chain + Aptos</title>
+<title>Wallet Übersicht Multi-Chain + Apertum</title>
 <style>
 body { font-family: Arial, sans-serif; margin: 20px; }
 table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
 th { background-color: #f2f2f2; }
+tfoot td { font-weight: bold; }
 </style>
 </head>
 <body>
 
-<h1>Wallet Übersicht Multi-Chain + Aptos</h1>
+<h1>Wallet Übersicht Multi-Chain + Apertum</h1>
 
 <table id="tokenTable">
 <thead>
@@ -30,15 +31,17 @@ th { background-color: #f2f2f2; }
 <tbody></tbody>
 <tfoot>
 <tr>
-  <td colspan="6" style="text-align:right"><strong>Gesamtwert pro Wallet:</strong></td>
-  <td id="totalValue">0</td>
+  <td colspan="6" style="text-align:right">Gesamtwert pro Wallet:</td>
+  <td id="totalValue">$0.00</td>
 </tr>
 </tfoot>
 </table>
 
 <script>
-const API_BASE = "https://private-seven-henna.vercel.app/"; // <-- hier Vercel URL eintragen
+// === Vercel API Base URL ===
+const API_BASE = "private-seven-henna.vercel.app/api"; // <-- HIER deine Vercel URL eintragen
 
+// Wallets
 const wallets = [
   "0xC7e112D6Db20A4A9213834B2Cb235c34733e6591",
   "0x59dc6669c1eb40df7b36be58812202a09c4491bf",
@@ -46,6 +49,7 @@ const wallets = [
   "0xbE44d90daD6308AE0b762908D70260c62410346E"
 ];
 
+// ChainMap für CoinGecko
 const chainMap = {
   eth: "ethereum",
   bsc: "binance-smart-chain",
@@ -53,9 +57,10 @@ const chainMap = {
   avalanche: "avalanche",
   arbitrum: "arbitrum-one",
   optimism: "optimistic-ethereum",
-  apertum: "apertum"
+  "2786": "apertum"
 };
 
+// Funktion: Preise von CoinGecko abrufen
 async function getPrices(chain, contracts) {
   if(contracts.length === 0) return {};
   const url = `https://api.coingecko.com/api/v3/simple/token_price/${chain}?contract_addresses=${contracts.join(",")}&vs_currencies=usd`;
@@ -63,6 +68,7 @@ async function getPrices(chain, contracts) {
   return await res.json();
 }
 
+// Hauptfunktion: Daten laden
 async function loadData() {
   const tbody = document.querySelector("#tokenTable tbody");
   tbody.innerHTML = "";
@@ -73,20 +79,27 @@ async function loadData() {
       const tokens = await tokensRes.json();
       let totalWallet = 0;
 
-      const ercContracts = tokens.filter(t => !t.token_address.includes("-native") && t.chain !== "aptos").map(t=>t.token_address.toLowerCase());
+      // ERC-20 Contracts (ohne Native, ohne Apertum)
+      const ercContracts = tokens
+        .filter(t => !t.token_address.includes("-native") && t.chain !== "2786")
+        .map(t => t.token_address.toLowerCase());
 
-      // CoinGecko Preis abrufen für ERC20 (ohne Aptos)
+      // Preise abrufen für ERC-20
       const prices = await getPrices("ethereum", ercContracts);
 
       for(const t of tokens){
         const balance = t.balance / Math.pow(10, t.decimals);
         let price = 0;
 
-        if(t.chain === "aptos") {
-          // CoinGecko Aptos Preis
-          const aptRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=aptos&vs_currencies=usd");
-          const aptPrice = await aptRes.json();
-          price = aptPrice.aptos.usd;
+        if(t.chain === "2786") {
+          // Apertum Preis
+          try {
+            const aptRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=apertum&vs_currencies=usd");
+            const aptPrice = await aptRes.json();
+            price = aptPrice.apertum?.usd || 0;
+          } catch(e){
+            price = 0;
+          }
         } else if(!t.token_address.includes("-native")) {
           price = prices[t.token_address.toLowerCase()]?.usd || 0;
         }
@@ -107,9 +120,8 @@ async function loadData() {
         tbody.appendChild(row);
       }
 
-      // Gesamtwert pro Wallet in Footer
-      const totalCell = document.getElementById("totalValue");
-      totalCell.innerText = `$${totalWallet.toFixed(2)}`;
+      // Gesamtwert pro Wallet aktualisieren
+      document.getElementById("totalValue").innerText = `$${totalWallet.toFixed(2)}`;
 
     } catch(err){
       console.error("Fehler bei Wallet:", wallet, err);
@@ -117,6 +129,7 @@ async function loadData() {
   }
 }
 
+// Daten beim Laden abrufen
 loadData();
 </script>
 
