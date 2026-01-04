@@ -2,46 +2,40 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wallet Übersicht Multi-Chain + Apertum</title>
+<title>Wallet Tokens</title>
 <style>
-body { font-family: Arial, sans-serif; margin: 20px; }
-table { border-collapse: collapse; width: 100%; }
-th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-th { background-color: #f2f2f2; }
-tfoot td { font-weight: bold; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
+  th { background-color: #f2f2f2; }
+  .hidden { display: none; }
 </style>
 </head>
 <body>
 
-<h1>00.28 Wallet Übersicht Multi-Chain + Apertum</h1>
+<h2>00.47 Wallet Token Übersicht</h2>
+
+<label>
+  <input type="checkbox" id="filterSpam"> Spam-Token ausblenden
+</label>
 
 <table id="tokenTable">
-<thead>
-<tr>
-  <th>Wallet</th>
-  <th>Chain</th>
-  <th>Token Adresse</th>
-  <th>Name</th>
-  <th>Anzahl</th>
-  <th>Kurs (USD)</th>
-  <th>Wert (USD)</th>
-</tr>
-</thead>
-<tbody></tbody>
-<tfoot>
-<tr>
-  <td colspan="6" style="text-align:right">Gesamtwert pro Wallet:</td>
-  <td id="totalValue">$0.00</td>
-</tr>
-</tfoot>
+  <thead>
+    <tr>
+      <th>Wallet</th>
+      <th>Chain</th>
+      <th>Token Adresse</th>
+      <th>Name</th>
+      <th>Anzahl</th>
+      <th>Kurs (USD)</th>
+      <th>Wert (USD)</th>
+      <th>Spam-Token</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
 </table>
 
 <script>
-// === Vercel API Base URL ===
-const API_BASE = "https://private-seven-henna.vercel.app/api"; // <-- HIER deine Vercel URL eintragen
-
-// Wallets
+const API_BASE = "https://private-seven-henna.vercel.app/api"; // Dein Vercel API
 const wallets = [
   "0xC7e112D6Db20A4A9213834B2Cb235c34733e6591",
   "0x59dc6669c1eb40df7b36be58812202a09c4491bf",
@@ -49,26 +43,27 @@ const wallets = [
   "0xbE44d90daD6308AE0b762908D70260c62410346E"
 ];
 
-// ChainMap für CoinGecko
-const chainMap = {
-  eth: "ethereum",
-  bsc: "binance-smart-chain",
-  polygon: "polygon-pos",
-  avalanche: "avalanche",
-  arbitrum: "arbitrum-one",
-  optimism: "optimistic-ethereum",
-  "2786": "apertum"
-};
+// --- Spam-Filter ---
+function isSpamToken(token) {
+  if (!token) return true;
+  if (token.token_address && token.token_address.includes("native")) return false; // native Coins nie Spam
 
-// Funktion: Preise von CoinGecko abrufen
-async function getPrices(chain, contracts) {
-  if(contracts.length === 0) return {};
-  const url = `https://api.coingecko.com/api/v3/simple/token_price/${chain}?contract_addresses=${contracts.join(",")}&vs_currencies=usd`;
-  const res = await fetch(url);
-  return await res.json();
+  const name = (token.name || "").toLowerCase();
+  const symbol = (token.symbol || "").toLowerCase();
+  const balance = token.balance || "0";
+
+  try { if (BigInt(balance) === 0n) return true; } catch { return true; }
+
+  const spamKeywords = ["airdrop","claim","reward","bonus","visit","http","https",".com",".net","free","gift","promo","scam"];
+  for(const word of spamKeywords){ if(name.includes(word) || symbol.includes(word)) return true; }
+
+  if(name.length > 40 || symbol.length > 15) return true;
+  if(!name || !symbol) return true;
+
+  return false; // kein Spam
 }
 
-// Hauptfunktion: Daten laden
+// --- Laden der Token ---
 async function loadData() {
   const tbody = document.querySelector("#tokenTable tbody");
   tbody.innerHTML = "";
@@ -77,35 +72,10 @@ async function loadData() {
     try {
       const tokensRes = await fetch(`${API_BASE}/wallet?wallet=${wallet}`);
       const tokens = await tokensRes.json();
-      let totalWallet = 0;
-
-      // ERC-20 Contracts (ohne Native, ohne Apertum)
-      const ercContracts = tokens
-        .filter(t => !t.token_address.includes("-native") && t.chain !== "2786")
-        .map(t => t.token_address.toLowerCase());
-
-      // Preise abrufen für ERC-20
-      const prices = await getPrices("ethereum", ercContracts);
 
       for(const t of tokens){
         const balance = t.balance / Math.pow(10, t.decimals);
-        let price = 0;
-
-        if(t.chain === "2786") {
-          // Apertum Preis
-          try {
-            const aptRes = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=apertum&vs_currencies=usd");
-            const aptPrice = await aptRes.json();
-            price = aptPrice.apertum?.usd || 0;
-          } catch(e){
-            price = 0;
-          }
-        } else if(!t.token_address.includes("-native")) {
-          price = prices[t.token_address.toLowerCase()]?.usd || 0;
-        }
-
-        const value = balance * price;
-        totalWallet += value;
+        const spam = isSpamToken(t) ? "Ja" : "Nein";
 
         const row = document.createElement("tr");
         row.innerHTML = `
@@ -114,22 +84,32 @@ async function loadData() {
           <td>${t.token_address}</td>
           <td>${t.symbol}</td>
           <td>${balance.toFixed(4)}</td>
-          <td>$${price.toFixed(4)}</td>
-          <td>$${value.toFixed(2)}</td>
+          <td>-</td>
+          <td>-</td>
+          <td>${spam}</td>
         `;
+        if(spam === "Ja") row.classList.add("spam");
         tbody.appendChild(row);
       }
 
-      // Gesamtwert pro Wallet aktualisieren
-      document.getElementById("totalValue").innerText = `$${totalWallet.toFixed(2)}`;
-
-    } catch(err){
-      console.error("Fehler bei Wallet:", wallet, err);
+    } catch(e){
+      console.error("Fehler bei Wallet:", wallet, e);
     }
   }
 }
 
-// Daten beim Laden abrufen
+// --- Filter Checkbox ---
+document.getElementById("filterSpam").addEventListener("change", function() {
+  const showSpam = this.checked;
+  document.querySelectorAll("#tokenTable tbody tr").forEach(row => {
+    if(showSpam) { // Checkbox an = Spam ausblenden
+      if(row.classList.contains("spam")) row.classList.add("hidden");
+    } else { // Checkbox aus = alle zeigen
+      row.classList.remove("hidden");
+    }
+  });
+});
+
 loadData();
 </script>
 
