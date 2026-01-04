@@ -783,11 +783,18 @@
                                         actualDecimals = parseInt(actualDecimals);
                                         console.log(`    📊 Decimals vom Contract: ${actualDecimals}`);
                                     } catch (decimalsError) {
-                                        console.log(`    ⚠️ Konnte Decimals nicht abrufen, verwende Default: ${actualDecimals}`);
+                                        console.log(`    ⚠️ Konnte Decimals nicht abrufen, überspringe Token`);
+                                        continue; // Token überspringen wenn nicht valide
                                     }
                                     
                                     // Balance abrufen
-                                    const rawBalance = await contract.methods.balanceOf(wallet.address).call();
+                                    let rawBalance;
+                                    try {
+                                        rawBalance = await contract.methods.balanceOf(wallet.address).call();
+                                    } catch (balanceError) {
+                                        console.log(`    ⚠️ Konnte Balance nicht abrufen, überspringe Token`);
+                                        continue; // Token überspringen wenn Balance-Call fehlschlägt
+                                    }
                                     
                                     // Token-Info abrufen (Name, Symbol)
                                     let tokenName = token.name;
@@ -804,7 +811,9 @@
                                         
                                         console.log(`    ℹ️ Token Info: ${tokenName} (${tokenSymbol}), Decimals: ${actualDecimals}`);
                                     } catch (infoError) {
-                                        console.log(`    ⚠️ Konnte Token-Info nicht abrufen, verwende Defaults`);
+                                        console.log(`    ⚠️ Konnte Token-Info nicht abrufen, verwende Adresse als Name`);
+                                        tokenName = token.address.substring(0, 10) + '...';
+                                        tokenSymbol = 'TOKEN';
                                     }
                                     
                                     // Balance mit den KORREKTEN Decimals berechnen
@@ -831,7 +840,8 @@
                                     console.log(`    ✅ Token hinzugefügt (Balance > 0)`);
                                 }
                             } catch (error) {
-                                console.error(`❌ Fehler bei ${wallet.name} - ${token.symbol} auf ${chain}:`, error.message);
+                                console.log(`    ⚠️ Token übersprungen wegen Fehler:`, error.message);
+                                // Einfach weitermachen mit nächstem Token
                             }
                         }
                     }
