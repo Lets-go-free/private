@@ -515,7 +515,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp">Version: 04.01.2026, 20:18:00 (Schweizer Zeit)</div>
+            <div class="timestamp">Version: 04.01.2026, 20:25:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
@@ -734,6 +734,9 @@
             polygon: 'polygon'
         };
 
+        // Cache für Native Token Preise (damit wir nicht für jedes Wallet neu abfragen)
+        const nativeTokenPriceCache = {};
+
         // Token-Preise von DexScreener API abrufen
         async function fetchTokenPrice(tokenAddress, chain) {
             try {
@@ -747,20 +750,43 @@
                     };
                     
                     const coinId = coinIds[chain];
-                    if (coinId) {
-                        console.log(`  💰 Hole Preis für Native Token (${chain}) von CoinGecko`);
-                        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`;
-                        const response = await fetch(url);
-                        const data = await response.json();
-                        
-                        if (data && data[coinId] && data[coinId].usd) {
-                            const priceUsd = data[coinId].usd;
-                            console.log(`    ✓ Preis gefunden: $${priceUsd}`);
-                            return priceUsd;
-                        }
+                    if (!coinId) {
+                        console.log(`    ⚠️ Keine CoinGecko ID für Chain ${chain}`);
+                        return null;
                     }
-                    return null;
+
+                    // Prüfe Cache zuerst
+                    if (nativeTokenPriceCache[coinId]) {
+                        console.log(`    ✓ Preis aus Cache: $${nativeTokenPriceCache[coinId]}`);
+                        return nativeTokenPriceCache[coinId];
+                    }
+
+                    console.log(`    💰 Hole Preis für Native Token (${chain}) von CoinGecko`);
+                    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`;
+                    
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        console.log(`    ❌ CoinGecko API Fehler: ${response.status} ${response.statusText}`);
+                        return null;
+                    }
+                    
+                    const data = await response.json();
+                    console.log(`    📥 CoinGecko Response:`, data);
+                    
+                    if (data && data[coinId] && data[coinId].usd) {
+                        const priceUsd = data[coinId].usd;
+                        nativeTokenPriceCache[coinId] = priceUsd; // Cache speichern
+                        console.log(`    ✓ Preis gefunden: $${priceUsd}`);
+                        return priceUsd;
+                    } else {
+                        console.log(`    ⚠️ Keine USD Preis-Daten in Response`);
+                        return null;
+                    }
                 }
+
+                // Kleines Delay um Rate Limits zu vermeiden
+                await new Promise(resolve => setTimeout(resolve, 300));
 
                 const chainId = dexScreenerChainIds[chain];
                 const url = `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`;
@@ -805,7 +831,7 @@
                 console.log(`    ⚠️ Kein Preis gefunden`);
                 return null;
             } catch (error) {
-                console.log(`    ⚠️ Fehler beim Preis-Abruf:`, error.message);
+                console.error(`    ❌ Fehler beim Preis-Abruf:`, error.message);
                 return null;
             }
         }
