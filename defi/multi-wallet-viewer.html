@@ -474,23 +474,24 @@
     </div>
     <!-- End Main App Content -->
 
-    <!-- Try multiple CDN sources for Web3 -->
-    <script src="https://cdn.jsdelivr.net/npm/web3@4.3.0/dist/web3.min.js" onerror="loadWeb3Fallback()"></script>
     <script>
         // Fallback CDN wenn jsdelivr nicht funktioniert
         function loadWeb3Fallback() {
             console.log('⚠️ Haupt-CDN fehlgeschlagen, versuche Fallback...');
             const script = document.createElement('script');
-            script.src = 'https://unpkg.com/web3@4.3.0/dist/web3.min.js';
+            script.src = 'https://unpkg.com/web3@latest/dist/web3.min.js';
             script.onerror = function() {
-                console.log('⚠️ Fallback fehlgeschlagen, versuche älteren CDN...');
+                console.log('⚠️ Fallback fehlgeschlagen, versuche GitHub CDN...');
                 const script2 = document.createElement('script');
-                script2.src = 'https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js';
+                script2.src = 'https://cdn.jsdelivr.net/gh/ethereum/web3.js@1.10.0/dist/web3.min.js';
                 document.head.appendChild(script2);
             };
             document.head.appendChild(script);
         }
     </script>
+
+    <!-- Try multiple CDN sources for Web3 -->
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js" onerror="loadWeb3Fallback()"></script>
     <script>
         // ============================================
         // PASSWORD PROTECTION
