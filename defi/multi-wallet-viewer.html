@@ -469,7 +469,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp">Version: 05.01.2026, 00:05:00 (Schweizer Zeit)</div>
+            <div class="timestamp">Version: 04.01.2026, 23:50:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
@@ -676,10 +676,29 @@
         // Token-Preise von DexScreener API abrufen
         async function fetchTokenPrice(tokenAddress, chain) {
             try {
-                // Native Tokens haben fixe Preise von bekannten APIs
+                // Native Tokens - verwende CoinGecko Simple Price API (kostenlos, kein Key nötig)
                 if (tokenAddress === 'native') {
-                    // Hier könnten wir CoinGecko oder andere APIs für ETH, BNB, etc. nutzen
-                    return null; // Erstmal null, später können wir das erweitern
+                    const coinIds = {
+                        'eth': 'ethereum',
+                        'bsc': 'binancecoin',
+                        'polygon': 'matic-network',
+                        'apertum': 'avalanche-2'
+                    };
+                    
+                    const coinId = coinIds[chain];
+                    if (coinId) {
+                        console.log(`  💰 Hole Preis für Native Token (${chain}) von CoinGecko`);
+                        const url = `https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd`;
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        
+                        if (data && data[coinId] && data[coinId].usd) {
+                            const priceUsd = data[coinId].usd;
+                            console.log(`    ✓ Preis gefunden: $${priceUsd}`);
+                            return priceUsd;
+                        }
+                    }
+                    return null;
                 }
 
                 const chainId = dexScreenerChainIds[chain];
@@ -688,14 +707,25 @@
                 console.log(`  💰 Hole Preis für ${tokenAddress} auf ${chain}`);
                 
                 const response = await fetch(url);
+                
+                if (!response.ok) {
+                    console.log(`    ⚠️ API Fehler: ${response.status}`);
+                    return null;
+                }
+                
                 const data = await response.json();
                 
                 if (data && data.pairs && data.pairs.length > 0) {
                     // Filtere nach der richtigen Chain
-                    const pairsOnChain = data.pairs.filter(pair => 
-                        pair.chainId === chainId || 
-                        pair.chainId === chain
+                    let pairsOnChain = data.pairs.filter(pair => 
+                        pair.chainId === chainId
                     );
+                    
+                    // Fallback: Wenn keine Pairs für die exakte Chain, nimm alle
+                    if (pairsOnChain.length === 0) {
+                        pairsOnChain = data.pairs;
+                        console.log(`    ⚠️ Keine Pairs für Chain ${chainId}, verwende alle verfügbaren`);
+                    }
                     
                     if (pairsOnChain.length > 0) {
                         // Nimm das Pair mit der höchsten Liquidität
@@ -706,7 +736,7 @@
                         });
                         
                         const priceUsd = parseFloat(bestPair.priceUsd);
-                        console.log(`    ✓ Preis gefunden: $${priceUsd}`);
+                        console.log(`    ✓ Preis gefunden: $${priceUsd} (DEX: ${bestPair.dexId}, Liquidität: $${bestPair.liquidity?.usd || 0})`);
                         return priceUsd;
                     }
                 }
