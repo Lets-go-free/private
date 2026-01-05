@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<title>Wallet Token Übersicht (Spam-Analyse)</title>
+<title>Wallet Token Übersicht</title>
 
 <style>
 body { font-family: Arial, sans-serif; }
@@ -15,10 +15,10 @@ tr.spam { background-color: #ffe6e6; }
 
 <body>
 
-<h2>Wallet Token Übersicht – Spam Analyse</h2>
-<p>Rot markierte Zeilen = als Spam erkannt</p>
+<h2>Wallet Token Übersicht (Moralis direkt)</h2>
+<p>Rot markiert = als Spam erkannt</p>
 
-<table id="tokenTable">
+<table>
 <thead>
 <tr>
   <th>Wallet</th>
@@ -26,14 +26,18 @@ tr.spam { background-color: #ffe6e6; }
   <th>Token-Adresse</th>
   <th>Name</th>
   <th>Anzahl</th>
-  <th>Spam-Token</th>
+  <th>Spam</th>
 </tr>
 </thead>
-<tbody></tbody>
+<tbody id="tbody"></tbody>
 </table>
 
 <script>
-const API_BASE = "https://private-seven-henna.vercel.app/api";
+/* ==========================
+   KONFIGURATION
+========================== */
+
+const MORALIS_API_KEY = "HIER_DEINEN_MORALIS_API_KEY_EINTRAGEN";
 
 const wallets = [
   "0xC7e112D6Db20A4A9213834B2Cb235c34733e6591",
@@ -42,19 +46,22 @@ const wallets = [
   "0xbE44d90daD6308AE0b762908D70260c62410346E"
 ];
 
-// ---- Spam Whitelist / Blacklist ----
-const spamWhitelist = [
-  // "0xTOKENADDRESS"
+// Nur unterstützte Moralis-Chains
+const chains = [
+  { id: "0x1", name: "Ethereum" },
+  { id: "0x38", name: "BSC" },
+  { id: "0x89", name: "Polygon" },
+  { id: "0xa4b1", name: "Arbitrum" }
 ];
 
-const spamBlacklist = [
-  // "0xTOKENADDRESS"
-];
+// Optional
+const spamWhitelist = [];
+const spamBlacklist = [];
 
-// ---- Spam-Erkennung ----
+/* ==========================
+   SPAM-ERKENNUNG
+========================== */
 function isSpamToken(t) {
-  if (!t) return true;
-
   const addr = (t.token_address || "").toLowerCase();
   const name = (t.name || "").toLowerCase();
   const symbol = (t.symbol || "").toLowerCase();
@@ -66,63 +73,62 @@ function isSpamToken(t) {
   if (name.length > 40 || symbol.length > 15) return true;
 
   const spamWords = [
-    "airdrop","claim","reward","bonus","promo","gift",
-    "free","visit","http","https",".com",".net","scam"
+    "airdrop","claim","reward","bonus","promo",
+    "gift","free","visit","http","https",".com","scam"
   ];
 
-  for (const w of spamWords) {
-    if (name.includes(w) || symbol.includes(w)) return true;
-  }
-
-  return false;
+  return spamWords.some(w => name.includes(w) || symbol.includes(w));
 }
 
-// ---- Daten laden ----
-async function loadData() {
-  const tbody = document.querySelector("#tokenTable tbody");
-  tbody.innerHTML = "";
+/* ==========================
+   DATEN LADEN
+========================== */
+async function loadTokens() {
+  const tbody = document.getElementById("tbody");
 
   for (const wallet of wallets) {
-    try {
-      const res = await fetch(`${API_BASE}/wallet?wallet=${wallet}`);
-      const tokens = await res.json();
+    for (const chain of chains) {
+      try {
+        const url = `https://deep-index.moralis.io/api/v2/${wallet}/erc20?chain=${chain.id}`;
 
-      console.log("Wallet:", wallet, tokens);
+        const res = await fetch(url, {
+          headers: {
+            "X-API-Key": MORALIS_API_KEY
+          }
+        });
 
-      for (const t of tokens) {
-        const balance = Number(t.balance) / Math.pow(10, t.decimals);
-        const spam = isSpamToken(t) ? "Ja" : "Nein";
+        const tokens = await res.json();
 
-        console.log(
-          "Token:",
-          t.symbol,
-          "Balance:",
-          balance,
-          "Spam:",
-          spam
-        );
+        for (const t of tokens) {
+          const balance = Number(t.balance) / Math.pow(10, t.decimals);
+          if (balance === 0) continue;
 
-        const tr = document.createElement("tr");
-        if (spam === "Ja") tr.classList.add("spam");
+          const spam = isSpamToken(t) ? "Ja" : "Nein";
 
-        tr.innerHTML = `
-          <td>${wallet}</td>
-          <td>${t.chain}</td>
-          <td>${t.token_address}</td>
-          <td>${t.symbol || "-"}</td>
-          <td>${balance}</td>
-          <td>${spam}</td>
-        `;
+          console.log(wallet, chain.name, t.symbol, balance, spam);
 
-        tbody.appendChild(tr);
+          const tr = document.createElement("tr");
+          if (spam === "Ja") tr.classList.add("spam");
+
+          tr.innerHTML = `
+            <td>${wallet}</td>
+            <td>${chain.name}</td>
+            <td>${t.token_address}</td>
+            <td>${t.symbol}</td>
+            <td>${balance}</td>
+            <td>${spam}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+
+      } catch (e) {
+        console.error("Fehler:", wallet, chain.name, e);
       }
-    } catch (err) {
-      console.error("Fehler bei Wallet", wallet, err);
     }
   }
 }
 
-loadData();
+loadTokens();
 </script>
 
 </body>
