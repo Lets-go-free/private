@@ -14,15 +14,10 @@
 
 <h2>Wallet Token Übersicht</h2>
 
-<!-- Dropdown Filter für Spam-Token -->
-<label for="filterSpamSelect">Spam-Token:</label>
-<select id="filterSpamSelect">
-  <option value="none">Alle anzeigen</option>
-  <option value="no">Nur echte Token anzeigen</option>
-  <option value="yes">Nur Spam-Token anzeigen</option>
-</select>
+<label>
+  <input type="checkbox" id="filterSpam"> Spam-Token ausblenden
+</label>
 
-<!-- Tabelle -->
 <table id="tokenTable">
   <thead>
     <tr>
@@ -79,7 +74,7 @@ function isSpamToken(token) {
   if(name.length > 40 || symbol.length > 15) return true;
   if(!name || !symbol) return true;
 
-  return false;
+  return false; // kein Spam
 }
 
 // --- Laden der Token ---
@@ -92,31 +87,27 @@ async function loadData() {
       const tokensRes = await fetch(`${API_BASE}/wallet?wallet=${wallet}`);
       const tokens = await tokensRes.json();
 
-for(const t of tokens){
-    const balance = t.balance / Math.pow(10, t.decimals);
+      for(const t of tokens){
+        const balance = t.balance / Math.pow(10, t.decimals);
 
-    if(balance === 0) continue; // 0-Balance ausblenden
+        if(balance === 0) continue; // Zeilen mit 0 Balance ausblenden
 
-    // Spam-Filter aktiv
-    const spam = isSpamToken(t) ? "Ja" : "Nein";
+        const spam = isSpamToken(t) ? "Ja" : "Nein";
 
-    // Debug in der Konsole
-    console.log(`Wallet: ${wallet}, Token: ${t.symbol}, Balance: ${balance.toFixed(4)}, Spam: ${spam}`);
-
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${wallet}</td>
-      <td>${t.chain}</td>
-      <td>${t.token_address}</td>
-      <td>${t.symbol}</td>
-      <td>${balance.toFixed(4)}</td>
-      <td>-</td>
-      <td>-</td>
-      <td>${spam}</td>
-    `;
-    if(spam === "Ja") row.classList.add("spam");
-    tbody.appendChild(row);
-}
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${wallet}</td>
+          <td>${t.chain}</td>
+          <td>${t.token_address}</td>
+          <td>${t.symbol}</td>
+          <td>${balance.toFixed(4)}</td>
+          <td>-</td>
+          <td>-</td>
+          <td>${spam}</td>
+        `;
+        if(spam === "Ja") row.classList.add("spam");
+        tbody.appendChild(row);
+      }
 
     } catch(e){
       console.error("Fehler bei Wallet:", wallet, e);
@@ -124,18 +115,14 @@ for(const t of tokens){
   }
 }
 
-// --- Dropdown Filter ---
-document.getElementById("filterSpamSelect").addEventListener("change", function() {
-  const value = this.value; // "none" | "no" | "yes"
+// --- Filter Checkbox ---
+document.getElementById("filterSpam").addEventListener("change", function() {
+  const hideSpam = this.checked;
   document.querySelectorAll("#tokenTable tbody tr").forEach(row => {
-    const spamCell = row.cells[7].textContent; // Spalte 8 = Spam-Token
-    row.classList.remove("hidden"); // erst alle sichtbar machen
-
-    if(value === "no" && spamCell === "Ja") {
-      row.classList.add("hidden"); // nur echte Token anzeigen
-    } 
-    if(value === "yes" && spamCell === "Nein") {
-      row.classList.add("hidden"); // nur Spam-Token anzeigen
+    if(hideSpam && row.classList.contains("spam")) {
+      row.classList.add("hidden");
+    } else {
+      row.classList.remove("hidden");
     }
   });
 });
