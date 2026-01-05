@@ -15,7 +15,7 @@
 <h2>Wallet Token Übersicht</h2>
 
 <label>
-  <input type="checkbox" id="filterSpam"> Nur Tokens mit Spam-Token = Nein anzeigen
+  <input type="checkbox" id="filterSpam"> Spam-Token ausblenden
 </label>
 
 <table id="tokenTable">
@@ -68,8 +68,7 @@ const spamBlacklist = [
   "0xa42d43c3ebf9040045479c205dc8c6f5ff710f4b",
   "0xa339891bf661d2e366ef2de37b9e2bac829d723d",
   "0xa18b59607b7286a6533fd8c7e8c9716eac9a5c73",
-  "0x996c90884a8ebdb1299ad222e193e2e47a6842aa",
-   // immer Spam
+  "0x996c90884a8ebdb1299ad222e193e2e47a6842aa" // immer Spam
 ];
 
 // --- Spam-Filter ---
@@ -136,10 +135,9 @@ async function loadData() {
 
 // --- Filter Checkbox ---
 document.getElementById("filterSpam").addEventListener("change", function() {
-  const showOnlyNoSpam = this.checked; // Checkbox an = nur Nein zeigen
+  const hideSpam = this.checked;
   document.querySelectorAll("#tokenTable tbody tr").forEach(row => {
-    const spamCell = row.cells[7].textContent; // Spalte 8 = Spam-Token
-    if(showOnlyNoSpam && spamCell === "Ja") {
+    if(hideSpam && row.classList.contains("spam")) {
       row.classList.add("hidden");
     } else {
       row.classList.remove("hidden");
