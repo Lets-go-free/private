@@ -515,7 +515,7 @@
     <div class="container">
         <div class="header">
             <h1>🔐 Multi-Wallet Token Viewer</h1>
-            <div class="timestamp">Version: 04.01.2026, 20:25:00 (Schweizer Zeit)</div>
+            <div class="timestamp">Version: 04.01.2026, 20:35:00 (Schweizer Zeit)</div>
         </div>
 
         <div class="controls">
@@ -937,139 +937,132 @@
                     <div class="loading">
                         <div class="spinner"></div>
                         <p>Lade Token-Daten von allen Chains...</p>
-                        <p style="font-size: 12px; margin-top: 10px;" id="loadingStatus"></p>
+                        <p style="font-size: 12px; margin-top: 10px;" id="loadingStatus">Initialisiere...</p>
                     </div>
                 `;
 
                 allBalances = [];
-                let processed = 0;
-                let total = 0;
+                
+                console.log(`📊 Starte paralleles Laden aller Token...`);
 
-                // Zähle total Abfragen
+                // Erstelle alle Load-Tasks parallel
+                const loadTasks = [];
+                
                 for (const wallet of wallets) {
                     for (const [chain, tokenList] of Object.entries(tokens)) {
-                        total += tokenList.length;
-                    }
-                }
-
-                console.log(`📊 Total zu ladende Token: ${total}`);
-
-                // Für jedes Wallet alle Token auf allen Chains laden
-                for (const wallet of wallets) {
-                    console.log(`👛 Lade Wallet: ${wallet.name}`);
-                    
-                    for (const [chain, tokenList] of Object.entries(tokens)) {
-                        console.log(`⛓️ Chain: ${chain}`);
                         const web3 = web3Instances[chain];
                         
                         for (const token of tokenList) {
-                            try {
-                                processed++;
-                                const statusEl = document.getElementById('loadingStatus');
-                                if (statusEl) {
-                                    statusEl.textContent = `${processed} von ${total} Token geladen...`;
-                                }
-
-                                let balance;
-                                
-                                if (token.address === 'native') {
-                                    // Native Token (ETH, BNB, etc.)
-                                    console.log(`  🪙 Lade Native Token: ${token.symbol}`);
-                                    const weiBalance = await web3.eth.getBalance(wallet.address);
-                                    balance = parseFloat(web3.utils.fromWei(weiBalance, 'ether'));
-                                } else {
-                                    // ERC-20 Token
-                                    console.log(`  🪙 Lade ERC-20 Token: ${token.address}`);
-                                    const contract = new web3.eth.Contract(ERC20_ABI, token.address);
-                                    
-                                    // WICHTIG: Decimals IMMER vom Contract abrufen
-                                    let actualDecimals = token.decimals; // Fallback
-                                    try {
-                                        actualDecimals = await contract.methods.decimals().call();
-                                        actualDecimals = parseInt(actualDecimals);
-                                        console.log(`    📊 Decimals vom Contract: ${actualDecimals}`);
-                                    } catch (decimalsError) {
-                                        console.log(`    ⚠️ Konnte Decimals nicht abrufen, überspringe Token`);
-                                        continue; // Token überspringen wenn nicht valide
-                                    }
-                                    
-                                    // Balance abrufen
-                                    let rawBalance;
-                                    try {
-                                        rawBalance = await contract.methods.balanceOf(wallet.address).call();
-                                    } catch (balanceError) {
-                                        console.log(`    ⚠️ Konnte Balance nicht abrufen, überspringe Token`);
-                                        continue; // Token überspringen wenn Balance-Call fehlschlägt
-                                    }
-                                    
-                                    // Token-Info abrufen (Name, Symbol)
+                            // Erstelle einen Task für jedes Token
+                            const task = (async () => {
+                                try {
+                                    let balance;
                                     let tokenName = token.name;
                                     let tokenSymbol = token.symbol;
+                                    let actualDecimals = token.decimals;
                                     
-                                    try {
-                                        const [fetchedName, fetchedSymbol] = await Promise.all([
-                                            contract.methods.name().call().catch(() => token.name),
-                                            contract.methods.symbol().call().catch(() => token.symbol)
-                                        ]);
+                                    if (token.address === 'native') {
+                                        // Native Token
+                                        const weiBalance = await web3.eth.getBalance(wallet.address);
+                                        balance = parseFloat(web3.utils.fromWei(weiBalance, 'ether'));
+                                    } else {
+                                        // ERC-20 Token
+                                        const contract = new web3.eth.Contract(ERC20_ABI, token.address);
                                         
-                                        tokenName = fetchedName;
-                                        tokenSymbol = fetchedSymbol;
+                                        // Decimals vom Contract holen
+                                        try {
+                                            actualDecimals = await contract.methods.decimals().call();
+                                            actualDecimals = parseInt(actualDecimals);
+                                        } catch (decimalsError) {
+                                            return null; // Token überspringen
+                                        }
                                         
-                                        console.log(`    ℹ️ Token Info: ${tokenName} (${tokenSymbol}), Decimals: ${actualDecimals}`);
-                                    } catch (infoError) {
-                                        console.log(`    ⚠️ Konnte Token-Info nicht abrufen, verwende Adresse als Name`);
-                                        tokenName = token.address.substring(0, 10) + '...';
-                                        tokenSymbol = 'TOKEN';
+                                        // Balance abrufen
+                                        try {
+                                            const rawBalance = await contract.methods.balanceOf(wallet.address).call();
+                                            balance = parseFloat(rawBalance) / Math.pow(10, actualDecimals);
+                                        } catch (balanceError) {
+                                            return null; // Token überspringen
+                                        }
+                                        
+                                        // Token-Info abrufen (optional, nur wenn Balance > 0)
+                                        if (balance > 0) {
+                                            try {
+                                                const [fetchedName, fetchedSymbol] = await Promise.all([
+                                                    contract.methods.name().call().catch(() => token.name),
+                                                    contract.methods.symbol().call().catch(() => token.symbol)
+                                                ]);
+                                                tokenName = fetchedName;
+                                                tokenSymbol = fetchedSymbol;
+                                            } catch (infoError) {
+                                                // Verwende Defaults
+                                            }
+                                        }
                                     }
-                                    
-                                    // Balance mit den KORREKTEN Decimals berechnen
-                                    balance = parseFloat(rawBalance) / Math.pow(10, actualDecimals);
-                                    
-                                    // Token-Info für die Anzeige updaten
-                                    token.name = tokenName;
-                                    token.symbol = tokenSymbol;
-                                    token.decimals = actualDecimals;
-                                }
 
-                                console.log(`    ✓ Balance: ${balance} ${token.symbol}`);
-
-                                // Token-Preis abrufen
-                                let priceUsd = null;
-                                let valueUsd = null;
-                                
-                                try {
-                                    priceUsd = await fetchTokenPrice(token.address, chain);
-                                    if (priceUsd && balance > 0) {
-                                        valueUsd = balance * priceUsd;
-                                        console.log(`    💵 Wert: $${valueUsd.toFixed(2)}`);
+                                    if (balance > 0) {
+                                        return {
+                                            wallet: wallet.name,
+                                            walletAddress: wallet.address,
+                                            tokenSymbol: tokenSymbol,
+                                            tokenName: tokenName,
+                                            chain: chain,
+                                            balance: balance,
+                                            tokenAddress: token.address,
+                                            decimals: actualDecimals,
+                                            priceUsd: null,
+                                            valueUsd: null
+                                        };
                                     }
-                                } catch (priceError) {
-                                    console.log(`    ⚠️ Preis-Abruf übersprungen`);
+                                    return null;
+                                } catch (error) {
+                                    return null;
                                 }
-
-                                if (balance > 0) {
-                                    allBalances.push({
-                                        wallet: wallet.name,
-                                        walletAddress: wallet.address,
-                                        tokenSymbol: token.symbol,
-                                        tokenName: token.name,
-                                        chain: chain,
-                                        balance: balance,
-                                        tokenAddress: token.address,
-                                        priceUsd: priceUsd,
-                                        valueUsd: valueUsd
-                                    });
-                                    console.log(`    ✅ Token hinzugefügt (Balance > 0)`);
-                                }
-                            } catch (error) {
-                                console.log(`    ⚠️ Token übersprungen wegen Fehler:`, error.message);
-                                // Einfach weitermachen mit nächstem Token
-                            }
+                            })();
+                            
+                            loadTasks.push(task);
                         }
                     }
                 }
 
-                console.log(`✅ Laden abgeschlossen. ${allBalances.length} Token mit Balance gefunden.`);
+                // Alle Token parallel laden
+                console.log(`⚡ Lade ${loadTasks.length} Token parallel...`);
+                const results = await Promise.all(loadTasks);
+                
+                // Filtere null-Werte raus
+                allBalances = results.filter(item => item !== null);
+                console.log(`✅ ${allBalances.length} Token mit Balance gefunden`);
+
+                // Status Update
+                const statusEl = document.getElementById('loadingStatus');
+                if (statusEl) {
+                    statusEl.textContent = `Lade Preise für ${allBalances.length} Token...`;
+                }
+
+                // Preise parallel laden (in Batches um Rate Limits zu vermeiden)
+                console.log(`💰 Lade Preise parallel...`);
+                const batchSize = 5; // 5 gleichzeitig
+                for (let i = 0; i < allBalances.length; i += batchSize) {
+                    const batch = allBalances.slice(i, i + batchSize);
+                    
+                    await Promise.all(batch.map(async (item) => {
+                        try {
+                            item.priceUsd = await fetchTokenPrice(item.tokenAddress, item.chain);
+                            if (item.priceUsd && item.balance > 0) {
+                                item.valueUsd = item.balance * item.priceUsd;
+                            }
+                        } catch (priceError) {
+                            // Preis konnte nicht geladen werden, bleibt null
+                        }
+                    }));
+                    
+                    // Status Update
+                    if (statusEl) {
+                        statusEl.textContent = `Preise geladen: ${Math.min(i + batchSize, allBalances.length)} von ${allBalances.length}`;
+                    }
+                }
+
+                console.log(`✅ Laden abgeschlossen`);
                 displayTable();
                 updateStats();
 
