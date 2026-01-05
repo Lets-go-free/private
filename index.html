@@ -92,27 +92,31 @@ async function loadData() {
       const tokensRes = await fetch(`${API_BASE}/wallet?wallet=${wallet}`);
       const tokens = await tokensRes.json();
 
-      for(const t of tokens){
-        const balance = t.balance / Math.pow(10, t.decimals);
+for(const t of tokens){
+    const balance = t.balance / Math.pow(10, t.decimals);
 
-        if(balance === 0) continue; // 0-Balance ausblenden
+    if(balance === 0) continue; // 0-Balance ausblenden
 
-        const spam = isSpamToken(t) ? "Ja" : "Nein";
+    // Spam-Filter aktiv
+    const spam = isSpamToken(t) ? "Ja" : "Nein";
 
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${wallet}</td>
-          <td>${t.chain}</td>
-          <td>${t.token_address}</td>
-          <td>${t.symbol}</td>
-          <td>${balance.toFixed(4)}</td>
-          <td>-</td>
-          <td>-</td>
-          <td>${spam}</td>
-        `;
-        if(spam === "Ja") row.classList.add("spam");
-        tbody.appendChild(row);
-      }
+    // Debug in der Konsole
+    console.log(`Wallet: ${wallet}, Token: ${t.symbol}, Balance: ${balance.toFixed(4)}, Spam: ${spam}`);
+
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${wallet}</td>
+      <td>${t.chain}</td>
+      <td>${t.token_address}</td>
+      <td>${t.symbol}</td>
+      <td>${balance.toFixed(4)}</td>
+      <td>-</td>
+      <td>-</td>
+      <td>${spam}</td>
+    `;
+    if(spam === "Ja") row.classList.add("spam");
+    tbody.appendChild(row);
+}
 
     } catch(e){
       console.error("Fehler bei Wallet:", wallet, e);
