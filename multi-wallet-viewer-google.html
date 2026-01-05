@@ -435,7 +435,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
     <script src="https://apis.google.com/js/api.js"></script>
-    <script src="https://accounts.google.com/gsi/client" async></script>
     <script>
         // Google Sheets Konfiguration
         const GOOGLE_CONFIG = {
@@ -491,92 +490,84 @@
 
         // GAPI initialisieren
         function gapiLoaded() {
-            gapi.load('client', initializeGapiClient);
-        }
-
-        async function initializeGapiClient() {
-            await gapi.client.init({
-                apiKey: GOOGLE_CONFIG.apiKey,
-                discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
+            gapi.load('client', async () => {
+                await gapi.client.init({
+                    apiKey: GOOGLE_CONFIG.apiKey,
+                    discoveryDocs: GOOGLE_CONFIG.discoveryDocs,
+                });
+                gapiInited = true;
+                console.log('✓ GAPI initialisiert');
+                maybeEnableButtons();
             });
-            gapiInited = true;
-            console.log('✓ GAPI initialisiert');
         }
 
-        // GIS initialisieren
+        // GIS Token Client initialisieren
         function gisLoaded() {
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: GOOGLE_CONFIG.clientId,
                 scope: GOOGLE_CONFIG.scopes,
-                callback: '', // wird später gesetzt
+                callback: async (response) => {
+                    if (response.error !== undefined) {
+                        console.error('Token Error:', response);
+                        document.getElementById('loginStatus').textContent = 'Fehler: ' + response.error;
+                        return;
+                    }
+                    
+                    console.log('✓ Access Token erhalten');
+                    accessToken = response.access_token;
+                    
+                    // Sheets laden
+                    await loadSheetsData();
+                    
+                    // UI umschalten
+                    document.getElementById('loginBox').style.display = 'none';
+                    document.getElementById('appContent').classList.add('loaded');
+                    
+                    // App starten
+                    initializeWeb3();
+                },
             });
             console.log('✓ GIS initialisiert');
             maybeEnableButtons();
         }
 
         function maybeEnableButtons() {
-            if (gapiInited) {
+            if (gapiInited && tokenClient) {
                 document.getElementById('loginStatus').textContent = 'Bereit zur Anmeldung';
+                document.getElementById('google-signin-button').innerHTML = `
+                    <button class="btn btn-primary" onclick="handleAuthClick()" style="width: 100%; padding: 12px 24px; font-size: 16px;">
+                        🔐 Mit Google anmelden
+                    </button>
+                `;
             }
         }
 
-        // Google Sign-In Button
-        window.onload = function() {
-            // Warte auf Google APIs
-            setTimeout(() => {
-                google.accounts.id.initialize({
-                    client_id: GOOGLE_CONFIG.clientId,
-                    callback: handleGoogleSignIn
-                });
-                
-                google.accounts.id.renderButton(
-                    document.getElementById('google-signin-button'),
-                    { 
-                        theme: 'outline', 
-                        size: 'large',
-                        text: 'signin_with',
-                        width: 300
-                    }
-                );
-
-                // Lade GAPI
-                gapiLoaded();
-            }, 1000);
-        };
-
-        function handleGoogleSignIn(response) {
-            console.log('Google Sign-In erfolgreich');
-            document.getElementById('loginStatus').textContent = 'Anmeldung erfolgreich! Lade Daten...';
+        // Auth-Button Click Handler
+        function handleAuthClick() {
+            console.log('🔑 Starte Authentifizierung...');
+            document.getElementById('loginStatus').textContent = 'Authentifiziere...';
             
-            // Token für API-Zugriff holen
-            tokenClient.callback = async (resp) => {
-                if (resp.error !== undefined) {
-                    console.error('Token Error:', resp);
-                    document.getElementById('loginStatus').textContent = 'Fehler beim Zugriff: ' + resp.error;
-                    return;
-                }
-                
-                accessToken = resp.access_token;
-                gapi.client.setToken({access_token: accessToken});
-                
-                // Sheets laden
-                await loadSheetsData();
-                
-                // UI umschalten
-                document.getElementById('loginBox').style.display = 'none';
-                document.getElementById('appContent').classList.add('loaded');
-                
-                // App starten
-                initializeWeb3();
-            };
-
             // Token anfordern
             if (gapi.client.getToken() === null) {
+                // Erste Authentifizierung - mit Consent
                 tokenClient.requestAccessToken({prompt: 'consent'});
             } else {
+                // Token existiert bereits
                 tokenClient.requestAccessToken({prompt: ''});
             }
         }
+
+        // Beim Laden der Seite
+        window.addEventListener('load', () => {
+            // Lade Google APIs
+            gapiLoaded();
+            
+            // Lade Google Identity Services
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.onload = gisLoaded;
+            document.head.appendChild(script);
+        });
 
         // Google Sheets Daten laden
         async function loadSheetsData() {
@@ -1056,9 +1047,6 @@
         document.getElementById('chainFilter').addEventListener('change', applyFilters);
         document.getElementById('tokenFilter').addEventListener('change', applyFilters);
         document.getElementById('groupByFilter').addEventListener('change', applyFilters);
-
-        // GIS laden
-        gisLoaded();
     </script>
 </body>
 </html>
