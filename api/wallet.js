@@ -1,74 +1,56 @@
-﻿// api/wallet.js
-
-const EVM_CHAINS = ["eth","bsc","polygon","avalanche","arbitrum","optimism"];
-const APERTUM_CHAIN_ID = "2786";
-
-export default async function handler(req, res) {
-  // ---- CORS Header setzen ----
-  res.setHeader("Access-Control-Allow-Origin", "*"); // erlaubt alle Domains
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+﻿export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // OPTIONS-Preflight beantworten
-  if(req.method === "OPTIONS") {
-    return res.status(200).end();
+  const wallet = req.query.wallet;
+  if (!wallet) {
+    return res.status(400).json({ error: "wallet missing" });
   }
 
+  const MORALIS_KEY = process.env.MORALIS_API_KEY;
+
+  // ✅ NUR gültige Moralis-Chains
+  const chains = [
+    "0x1",    // Ethereum
+    "0x38",   // BSC
+    "0x89",   // Polygon
+    "0xa4b1", // Arbitrum
+    "0xa"     // Optimism
+  ];
+
+  let allTokens = [];
+
   try {
-    const wallet = req.query.wallet;
-    if(!wallet) return res.status(400).json({ error: "wallet missing" });
+    for (const chain of chains) {
+      const url = `https://deep-index.moralis.io/api/v2/${wallet}/erc20?chain=${chain}`;
 
-    const MORALIS_KEY = process.env.MORALIS_API_KEY;
-    if(!MORALIS_KEY) return res.status(500).json({ error: "API key missing" });
-
-    let allTokens = [];
-
-    // --- EVM Chains ---
-    for(const chain of EVM_CHAINS){
-      // ERC-20 Tokens
-      const ercRes = await fetch(`https://deep-index.moralis.io/api/v2.2/${wallet}/erc20?chain=${chain}`, {
-        headers: { "X-API-Key": MORALIS_KEY }
+      const r = await fetch(url, {
+        headers: {
+          "X-API-Key": MORALIS_KEY
+        }
       });
-      const ercJson = ercRes.ok ? await ercRes.json() : [];
 
-      // Native Balance
-      const balRes = await fetch(`https://deep-index.moralis.io/api/v2.2/${wallet}/balance?chain=${chain}`, {
-        headers: { "X-API-Key": MORALIS_KEY }
-      });
-      const balData = balRes.ok ? await balRes.json() : null;
-      if(balData){
-        ercJson.push({
-          token_address: chain+"-native",
-          symbol: chain.toUpperCase(),
-          name: chain.toUpperCase(),
-          balance: balData.balance,
-          decimals: 18
+      const data = await r.json();
+
+      if (Array.isArray(data)) {
+        data.forEach(t => {
+          allTokens.push({
+            chain,
+            token_address: t.token_address,
+            name: t.name,
+            symbol: t.symbol,
+            decimals: Number(t.decimals),
+            balance: t.balance
+          });
         });
       }
-
-      allTokens.push(...ercJson.map(t => ({ ...t, chain })));
     }
 
-    // --- Apertum Chain ---
-    const aptRes = await fetch(`https://deep-index.moralis.io/api/v2.2/${wallet}/balance?chain=${APERTUM_CHAIN_ID}`, {
-      headers: { "X-API-Key": MORALIS_KEY }
-    });
-    const aptData = aptRes.ok ? await aptRes.json() : null;
-    if(aptData){
-      allTokens.push({
-        token_address: APERTUM_CHAIN_ID+"-native",
-        symbol: "APTUM",
-        name: "Apertum",
-        balance: aptData.balance,
-        decimals: 18,
-        chain: APERTUM_CHAIN_ID
-      });
-    }
+    return res.status(200).json(allTokens);
 
-    res.status(200).json(allTokens);
-
-  } catch(e){
-    console.error("wallet.js crashed:", e);
-    res.status(500).json({ error: "internal server error" });
+  } catch (err) {
+    console.error("API ERROR", err);
+    return res.status(500).json({ error: "api failed" });
   }
 }
