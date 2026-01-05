@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     if (!wallet) {
       return res.status(400).json({ error: "wallet missing" });
     }
-.
+
     const url = `https://deep-index.moralis.io/api/v2/${wallet}/erc20?chain=0x1`;
 
     const response = await fetch(url, {
