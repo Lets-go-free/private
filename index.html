@@ -14,10 +14,15 @@
 
 <h2>Wallet Token Übersicht</h2>
 
-<label>
-  <input type="checkbox" id="filterSpam"> Spam-Token ausblenden
-</label>
+<!-- Dropdown Filter für Spam-Token -->
+<label for="filterSpamSelect">Spam-Token:</label>
+<select id="filterSpamSelect">
+  <option value="none">Alle anzeigen</option>
+  <option value="no">Nur echte Token anzeigen</option>
+  <option value="yes">Nur Spam-Token anzeigen</option>
+</select>
 
+<!-- Tabelle -->
 <table id="tokenTable">
   <thead>
     <tr>
@@ -44,33 +49,15 @@ const wallets = [
 ];
 
 // --- Whitelist / Blacklist Beispiel ---
-<!-- const spamWhitelist = [
+const spamWhitelist = [
   "0x1234567890abcdef1234567890abcdef12345678", // niemals Spam
   "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
- -->];
-
-<!-- const spamBlacklist = [
-  "0x38b6088849e98115315bad2786f6490474158c33",
-  "0xfdaa1b7c115d38dabbb83b8fc4b82a09cce63bc9",
-  "0xb22f7282af0f418f13172ff12d2b24655c0d30ac",
-  "0x61f11808ac03130d0b32588ab0fb0233e6b36198",
-  "0x3905dcadc3ea357dcbfb538d74ed4995b5fbf290",
-  "0x15910f2d7d7bf5d80750761ac028e7ce312f9d67",
-  "0xe17c57af88d9c75ba43c810dad118c8a3ebc431a",
-  "0xfd7445566c958aa40334c0a2c74c220ee50047b5",
-  "0xf9f842f855e76b23fc2e48c87348995ca65cfa92",
-  "0xf745742f3c8ff7bf7ddb9e9762e877e279ae4944",
-  "0xda0da3bcfca4828de59a2b2c162cc708dd1c8ff3",
-  "0xd5da8318ce7ca005e8f5285db0e750ca9256586e",
-  "0xcd6a51559254030ca30c2fb2cbdf5c492e8caf9c",
-  "0xcd6a51559254030ca30c2fb2cbdf5c492e8caf9c",
-  "0xab6ea9c404a3ba5a6dafc6c52010001535ca161c",
-  "0xa42d43c3ebf9040045479c205dc8c6f5ff710f4b",
-  "0xa339891bf661d2e366ef2de37b9e2bac829d723d",
-  "0xa18b59607b7286a6533fd8c7e8c9716eac9a5c73",
-  "0x996c90884a8ebdb1299ad222e193e2e47a6842aa" // immer Spam
 ];
- -->
+
+const spamBlacklist = [
+  "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef" // immer Spam
+];
+
 // --- Spam-Filter ---
 function isSpamToken(token) {
   if (!token) return true;
@@ -92,7 +79,7 @@ function isSpamToken(token) {
   if(name.length > 40 || symbol.length > 15) return true;
   if(!name || !symbol) return true;
 
-  return false; // kein Spam
+  return false;
 }
 
 // --- Laden der Token ---
@@ -108,7 +95,7 @@ async function loadData() {
       for(const t of tokens){
         const balance = t.balance / Math.pow(10, t.decimals);
 
-        if(balance === 0) continue; // Zeilen mit 0 Balance ausblenden
+        if(balance === 0) continue; // 0-Balance ausblenden
 
         const spam = isSpamToken(t) ? "Ja" : "Nein";
 
@@ -133,14 +120,18 @@ async function loadData() {
   }
 }
 
-// --- Filter Checkbox ---
-document.getElementById("filterSpam").addEventListener("change", function() {
-  const hideSpam = this.checked;
+// --- Dropdown Filter ---
+document.getElementById("filterSpamSelect").addEventListener("change", function() {
+  const value = this.value; // "none" | "no" | "yes"
   document.querySelectorAll("#tokenTable tbody tr").forEach(row => {
-    if(hideSpam && row.classList.contains("spam")) {
-      row.classList.add("hidden");
-    } else {
-      row.classList.remove("hidden");
+    const spamCell = row.cells[7].textContent; // Spalte 8 = Spam-Token
+    row.classList.remove("hidden"); // erst alle sichtbar machen
+
+    if(value === "no" && spamCell === "Ja") {
+      row.classList.add("hidden"); // nur echte Token anzeigen
+    } 
+    if(value === "yes" && spamCell === "Nein") {
+      row.classList.add("hidden"); // nur Spam-Token anzeigen
     }
   });
 });
